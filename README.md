@@ -4,7 +4,7 @@
 
 - Docker and Docker Compose installed
 - pnpm installed
-- Python 3.12 or newer
+- Python 3.9 or newer
 
 ## Local setup
 
@@ -13,6 +13,8 @@
 1. `docker compose -f infra/docker-compose.yml up -d`
 2. `cd apps/api && python -m venv .venv && source .venv/bin/activate && pip install -e .`
 3. `cd apps/web && pnpm install`
+
+The API package includes a minimal `setup.py` shim so editable installs work on older pip/setuptools toolchains without any extra bootstrap step.
 
 ### Future dev commands
 
