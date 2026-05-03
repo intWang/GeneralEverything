@@ -6,15 +6,16 @@ Create Date: 2026-05-03 00:00:00
 """
 
 from collections.abc import Sequence
+from typing import Optional
 
 import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260503_01"
-down_revision: str | None = None
-branch_labels: Sequence[str] | None = None
-depends_on: Sequence[str] | None = None
+down_revision: Optional[str] = None
+branch_labels: Optional[Sequence[str]] = None
+depends_on: Optional[Sequence[str]] = None
 
 input_mode_enum = sa.Enum(
     "public_video",
@@ -43,19 +44,19 @@ def upgrade() -> None:
             "status",
             job_status_enum,
             nullable=False,
-            server_default="queued",
+            server_default=sa.text("'queued'"),
         ),
         sa.Column(
             "stage",
             sa.String(length=64),
             nullable=False,
-            server_default="queued",
+            server_default=sa.text("'queued'"),
         ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=sa.func.current_timestamp(),
         ),
         sa.PrimaryKeyConstraint("id"),
     )

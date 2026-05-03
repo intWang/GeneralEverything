@@ -1,6 +1,8 @@
+import uuid
+
 from pydantic import BaseModel, ConfigDict, HttpUrl
 
-from app.models.job import InputMode, JobStatus
+from app.models import InputMode, JobStatus
 
 
 class CreateJobRequest(BaseModel):
@@ -11,8 +13,8 @@ class CreateJobRequest(BaseModel):
 class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    input_mode: str
-    source_url: str
-    status: str
+    id: uuid.UUID
+    input_mode: InputMode
+    source_url: HttpUrl
+    status: JobStatus
     stage: str

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
 
-from sqlalchemy import DateTime, Enum, String, Text, Uuid, func
+from sqlalchemy import DateTime, Enum, String, Text, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -32,11 +32,17 @@ class AnalysisJob(Base):
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, name="job_status"),
         default=JobStatus.QUEUED,
+        server_default=text("'queued'"),
         nullable=False,
     )
-    stage: Mapped[str] = mapped_column(String(64), default="queued", nullable=False)
+    stage: Mapped[str] = mapped_column(
+        String(64),
+        default="queued",
+        server_default=text("'queued'"),
+        nullable=False,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
+        server_default=func.current_timestamp(),
         nullable=False,
     )
