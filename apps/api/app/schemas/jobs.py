@@ -6,7 +6,6 @@ from app.models import InputMode, JobStatus
 
 
 class CreateJobRequest(BaseModel):
-    input_mode: InputMode
     source_url: HttpUrl
 
 

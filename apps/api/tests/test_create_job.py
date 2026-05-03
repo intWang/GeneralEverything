@@ -42,7 +42,6 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
     response = client.post(
         "/api/jobs",
         json={
-            "input_mode": "public_video",
             "source_url": "https://example.com/video",
         },
     )
@@ -61,3 +60,43 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
     assert str(persisted_job.id) == body["id"]
     assert persisted_job.stage == "queued"
     assert persisted_job.created_at is not None
+
+
+def test_create_job_detects_ringcentral_recording_url(tmp_path) -> None:
+    database_path = tmp_path / "jobs.db"
+    migrate_database(database_path)
+    engine = create_engine(f"sqlite:///{database_path}", future=True)
+    testing_session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+
+    def override_get_session() -> Generator[Session, None, None]:
+        session = testing_session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = override_get_session
+    client = TestClient(app)
+
+    source_url = (
+        "https://xmrupxmn-rxe-1-v.int.rclabenv.com/recordings/abc?isMeetingId=true"
+    )
+    response = client.post(
+        "/api/jobs",
+        json={
+            "source_url": source_url,
+        },
+    )
+
+    app.dependency_overrides.clear()
+
+    body = response.json()
+    assert response.status_code == 201
+    assert body["input_mode"] == "ringcentral_recording"
+    assert body["source_url"] == source_url
+
+    with testing_session() as session:
+        persisted_job = session.query(AnalysisJob).one()
+
+    assert str(persisted_job.id) == body["id"]
+    assert persisted_job.input_mode.value == "ringcentral_recording"

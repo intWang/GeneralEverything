@@ -1,8 +1,16 @@
 from urllib.parse import urlparse
 
+from app.models import InputMode
 
-def detect_source_type(url: str) -> str:
+
+RINGCENTRAL_HOST_SUFFIXES = (
+    ".ringcentral.com",
+    ".rclabenv.com",
+)
+
+
+def detect_source_type(url: str) -> InputMode:
     host = urlparse(url).hostname or ""
-    if host.endswith("rclabenv.com") or "ringcentral" in host:
-        return "ringcentral_recording"
-    return "public_video"
+    if host == "ringcentral.com" or host.endswith(RINGCENTRAL_HOST_SUFFIXES):
+        return InputMode.RINGCENTRAL_RECORDING
+    return InputMode.PUBLIC_VIDEO
