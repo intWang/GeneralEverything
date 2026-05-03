@@ -13,10 +13,12 @@
     "react-dom": "^18.3.0"
   },
   "devDependencies": {
+    "eslint": "^9.0.0",
+    "eslint-config-next": "^14.2.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
-    "playwright": "^1.46.0",
+    "@playwright/test": "^1.46.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
   }
