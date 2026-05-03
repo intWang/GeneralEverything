@@ -4,7 +4,7 @@
 
 - Docker and Docker Compose installed
 - pnpm installed
-- Python 3.9 or newer
+- Python 3.12 or newer
 
 ## Local setup
 
