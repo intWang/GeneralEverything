@@ -1,0 +1,42 @@
+import uuid
+from datetime import datetime
+from enum import Enum as PyEnum
+
+from sqlalchemy import DateTime, Enum, String, Text, Uuid, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.models.base import Base
+
+
+class InputMode(str, PyEnum):
+    PUBLIC_VIDEO = "public_video"
+    RINGCENTRAL_RECORDING = "ringcentral_recording"
+
+
+class JobStatus(str, PyEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    FAILED = "failed"
+    COMPLETED = "completed"
+
+
+class AnalysisJob(Base):
+    __tablename__ = "analysis_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    input_mode: Mapped[InputMode] = mapped_column(
+        Enum(InputMode, name="input_mode"),
+        nullable=False,
+    )
+    source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[JobStatus] = mapped_column(
+        Enum(JobStatus, name="job_status"),
+        default=JobStatus.QUEUED,
+        nullable=False,
+    )
+    stage: Mapped[str] = mapped_column(String(64), default="queued", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
