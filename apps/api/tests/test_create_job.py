@@ -11,10 +11,14 @@ from app.db import get_session
 from app.main import app
 from app.models.job import AnalysisJob
 
+API_ROOT = Path(__file__).resolve().parents[1]
+ALEMBIC_INI_PATH = API_ROOT / "alembic.ini"
+ALEMBIC_SCRIPT_PATH = API_ROOT / "alembic"
+
 
 def migrate_database(database_path: Path) -> None:
-    config = Config("/Users/ace.wang/Documents/GeneralEveryThing/apps/api/alembic.ini")
-    config.set_main_option("script_location", "/Users/ace.wang/Documents/GeneralEveryThing/apps/api/alembic")
+    config = Config(str(ALEMBIC_INI_PATH))
+    config.set_main_option("script_location", str(ALEMBIC_SCRIPT_PATH))
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path}")
     command.upgrade(config, "head")
 
