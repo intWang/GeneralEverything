@@ -1,5 +1,16 @@
 from app.models import JobStatus
-from app.services.qa_pipeline import describe_qa_shell
+from app.services.qa_pipeline import describe_qa_shell, qa_is_ready
+
+
+def test_qa_requires_three_or_more_grounded_chunks() -> None:
+    assert qa_is_ready(2, "ready", "ready") is False
+    assert qa_is_ready(3, "ready", "ready") is True
+
+
+def test_qa_requires_ready_summary_and_mindmap_shells() -> None:
+    assert qa_is_ready(3, "failed", "ready") is False
+    assert qa_is_ready(3, "ready", "failed") is False
+    assert qa_is_ready(3, "ready", "ready") is True
 
 
 def test_qa_shell_waits_for_grounding_while_job_is_queued() -> None:
@@ -27,6 +38,21 @@ def test_qa_shell_enters_grounding_mode_after_transcript_stage() -> None:
     assert shell.grounding_status == "stabilizing_grounding"
     assert shell.answer_placeholder == "preparing"
     assert shell.can_submit is False
+
+
+def test_qa_shell_unlocks_after_grounding_threshold_is_met() -> None:
+    shell = describe_qa_shell(
+        JobStatus.RUNNING,
+        "mindmap_generated",
+        transcript_segment_count=3,
+        summary_status="ready",
+        mindmap_status="ready",
+    )
+
+    assert shell.state == "complete"
+    assert shell.grounding_status == "grounded"
+    assert shell.answer_placeholder == "awaiting_question"
+    assert shell.can_submit is True
 
 
 def test_qa_shell_is_ready_after_completed_job() -> None:

@@ -17,7 +17,26 @@ class QAPipelineShell:
     can_submit: bool
 
 
-def describe_qa_shell(status: JobStatus, stage: str) -> QAPipelineShell:
+def qa_is_ready(
+    transcript_segment_count: int | None,
+    summary_status: str | None,
+    mindmap_status: str | None,
+) -> bool:
+    return (
+        (transcript_segment_count or 0) >= 3
+        and summary_status == "ready"
+        and mindmap_status == "ready"
+    )
+
+
+def describe_qa_shell(
+    status: JobStatus,
+    stage: str,
+    *,
+    transcript_segment_count: int | None = None,
+    summary_status: str | None = None,
+    mindmap_status: str | None = None,
+) -> QAPipelineShell:
     if status is JobStatus.COMPLETED:
         return QAPipelineShell(
             state="complete",
@@ -32,6 +51,14 @@ def describe_qa_shell(status: JobStatus, stage: str) -> QAPipelineShell:
             grounding_status="unavailable",
             answer_placeholder="blocked",
             can_submit=False,
+        )
+
+    if qa_is_ready(transcript_segment_count, summary_status, mindmap_status):
+        return QAPipelineShell(
+            state="complete",
+            grounding_status="grounded",
+            answer_placeholder="awaiting_question",
+            can_submit=True,
         )
 
     if status is JobStatus.RUNNING:
@@ -59,4 +86,10 @@ def describe_qa_shell(status: JobStatus, stage: str) -> QAPipelineShell:
 
 
 def describe_job_qa_shell(job: AnalysisJob) -> QAPipelineShell:
-    return describe_qa_shell(job.status, job.stage)
+    return describe_qa_shell(
+        job.status,
+        job.stage,
+        transcript_segment_count=job.transcript_segment_count,
+        summary_status=job.summary_status,
+        mindmap_status=job.mindmap_status,
+    )

@@ -118,6 +118,9 @@ function deriveTabShellStates(
 function deriveAskAiShellState(
   jobStatus: JobStatus,
   jobStage?: string,
+  transcriptSegmentCount?: JobRecord["transcript_segment_count"],
+  summaryStatus?: JobRecord["summary_status"],
+  mindmapStatus?: JobRecord["mindmap_status"],
 ): AskAiShellState {
   if (jobStatus === "completed") {
     return "complete";
@@ -125,6 +128,15 @@ function deriveAskAiShellState(
 
   if (jobStatus === "failed") {
     return "failed";
+  }
+
+  const qaIsReady =
+    (transcriptSegmentCount ?? 0) >= 3 &&
+    summaryStatus === "ready" &&
+    mindmapStatus === "ready";
+
+  if (qaIsReady) {
+    return "complete";
   }
 
   if (jobStatus === "running") {
@@ -157,7 +169,13 @@ export function AITabs({
 }: AITabsProps) {
   const [activeTab, setActiveTab] = useState<AITab>(tabs[0] ?? "Summary");
   const shellStates = deriveTabShellStates(jobStatus, jobStage);
-  const askAiShellState = deriveAskAiShellState(jobStatus, jobStage);
+  const askAiShellState = deriveAskAiShellState(
+    jobStatus,
+    jobStage,
+    transcriptSegmentCount,
+    summaryStatus,
+    mindmapStatus,
+  );
 
   return (
     <section aria-label="AI analysis panels" className={styles.panel}>

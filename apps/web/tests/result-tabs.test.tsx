@@ -158,6 +158,31 @@ test("shows Ask AI in grounding mode while summary context is still stabilizing"
   expect(screen.getByRole("button", { name: "Submit question" })).toBeDisabled();
 });
 
+test("unlocks Ask AI once transcript threshold and stable shells are available", () => {
+  render(
+    <AITabs
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapStatus="ready"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "What should I review next?" },
+  });
+
+  expect(
+    screen.getByText("Ask AI shell is ready for grounded follow-ups"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Grounding source: finalized transcript and summary shells."),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submit question" })).toBeEnabled();
+});
+
 test("shows transcript-ready shell details when audio extraction is complete", () => {
   render(
     <AITabs

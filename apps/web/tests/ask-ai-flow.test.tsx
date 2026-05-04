@@ -35,18 +35,24 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
     created_at: "2026-05-04T13:00:00Z",
     id: "55555555-5555-5555-5555-555555555555",
     input_mode: "public_video",
+    mindmap_status: "ready",
     source_url: "https://example.com/ask-ai-ready",
-    stage: "building_mindmap",
-    status: "completed",
+    stage: "mindmap_generated",
+    status: "running",
+    summary_status: "ready",
+    transcript_segment_count: 3,
   });
   listJobs.mockResolvedValue([
     {
       created_at: "2026-05-04T13:00:00Z",
       id: "55555555-5555-5555-5555-555555555555",
       input_mode: "public_video",
+      mindmap_status: "ready",
       source_url: "https://example.com/ask-ai-ready",
-      stage: "building_mindmap",
-      status: "completed",
+      stage: "mindmap_generated",
+      status: "running",
+      summary_status: "ready",
+      transcript_segment_count: 3,
     },
   ]);
 
@@ -55,7 +61,7 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
   await waitFor(() => {
     expect(
       screen.getByText(
-        "Job 55555555-5555-5555-5555-555555555555 is completed for analysis.",
+        "Job 55555555-5555-5555-5555-555555555555 generated a mind map shell preview.",
       ),
     ).toBeInTheDocument();
   });
