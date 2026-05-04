@@ -5,8 +5,6 @@ import { vi } from "vitest";
 import * as api from "../lib/api";
 import * as sse from "../lib/sse";
 
-type HomePageComponent = typeof import("../app/page").default;
-
 vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
   getJob: vi.fn(),
@@ -18,17 +16,13 @@ vi.mock("../lib/sse", () => ({
   subscribeToJobEvents: vi.fn(),
 }));
 
-let HomePage: HomePageComponent;
+globalThis.React = React;
+const { default: HomePage } = await import("../app/page");
 
 beforeEach(() => {
   vi.clearAllMocks();
   window.history.replaceState({}, "", "/");
   vi.mocked(sse.subscribeToJobEvents).mockReturnValue(() => undefined);
-});
-
-beforeEach(async () => {
-  (globalThis as { React?: typeof React }).React = React;
-  ({ default: HomePage } = await import("../app/page"));
 });
 
 test("smoke: homepage opens the Ask AI shell for a completed job", async () => {
