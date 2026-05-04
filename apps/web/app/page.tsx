@@ -228,6 +228,8 @@ export default function HomePage() {
       return;
     }
 
+    const activeJobId = jobState.id;
+
     return subscribeToJobEvents(jobState.id, {
       onEvent: (event) => {
         if (event.event !== "job.status") {
@@ -258,6 +260,17 @@ export default function HomePage() {
               }
             : currentState,
         );
+
+        void getJob(activeJobId)
+          .then((job) => {
+            setJobState((currentState) =>
+              currentState?.id === activeJobId ? job : currentState,
+            );
+            setInputMode((currentMode) =>
+              currentMode === job.input_mode ? currentMode : job.input_mode,
+            );
+          })
+          .catch(() => undefined);
       },
     });
   }, [jobState?.id]);

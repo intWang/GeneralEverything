@@ -186,6 +186,91 @@ test("maps backend completed status to a complete timeline state", async () => {
   ).toHaveAttribute("data-state", "complete");
 });
 
+test("refreshes the active job snapshot when a status event arrives", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=77777777-7777-7777-7777-777777777777",
+  );
+  getJob
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T16:00:00Z",
+      id: "77777777-7777-7777-7777-777777777777",
+      input_mode: "public_video",
+      source_url: "https://example.com/live-refresh",
+      stage: "queued",
+      status: "queued",
+      title: null,
+    })
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T16:00:00Z",
+      id: "77777777-7777-7777-7777-777777777777",
+      input_mode: "public_video",
+      source_url: "https://example.com/live-refresh",
+      stage: "summary_generated",
+      status: "running",
+      summary_key_points_count: 2,
+      summary_preview_text: "Summary shell generated from transcript preview.",
+      summary_status: "ready",
+      title: "Live refresh title",
+    });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:00:00Z",
+      id: "77777777-7777-7777-7777-777777777777",
+      input_mode: "public_video",
+      source_url: "https://example.com/live-refresh",
+      stage: "queued",
+      status: "queued",
+      title: null,
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 77777777-7777-7777-7777-777777777777 is queued for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  handlers?.onEvent?.({
+    event: "job.status",
+    data: {
+      job_id: "77777777-7777-7777-7777-777777777777",
+      stage: "summary_generated",
+      status: "running",
+    },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("Live refresh title")).toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByText("Key point shells ready: 2"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Preview: Summary shell generated from transcript preview."),
+  ).toBeInTheDocument();
+  expect(getJob).toHaveBeenCalledTimes(2);
+});
+
 test("shows metadata-ready timeline copy for a hydrated job", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
