@@ -24,6 +24,9 @@ export type JobRecord = {
   source_url: string;
   stage: JobStage;
   status: JobStatus;
+  summary_key_points_count?: number | null;
+  summary_preview_text?: string | null;
+  summary_status?: string | null;
   transcript_audio_artifact_path?: string | null;
   transcript_extractor?: string | null;
   transcript_preview_text?: string | null;

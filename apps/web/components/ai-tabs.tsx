@@ -18,6 +18,9 @@ type AITabsProps = {
   activeJobId?: string;
   jobStage?: string;
   jobStatus?: JobStatus;
+  summaryKeyPointsCount?: JobRecord["summary_key_points_count"];
+  summaryPreviewText?: JobRecord["summary_preview_text"];
+  summaryStatus?: JobRecord["summary_status"];
   transcriptAudioArtifactPath?: JobRecord["transcript_audio_artifact_path"];
   transcriptExtractor?: JobRecord["transcript_extractor"];
   transcriptPreviewText?: JobRecord["transcript_preview_text"];
@@ -59,6 +62,14 @@ function deriveTabShellStates(
       return {
         summary: "queued",
         transcript: "partial",
+        mindmap: "queued",
+      };
+    }
+
+    if (jobStage === "summary_generated") {
+      return {
+        summary: "partial",
+        transcript: "complete",
         mindmap: "queued",
       };
     }
@@ -128,6 +139,9 @@ export function AITabs({
   activeJobId,
   jobStage,
   jobStatus = "queued",
+  summaryKeyPointsCount,
+  summaryPreviewText,
+  summaryStatus,
   transcriptAudioArtifactPath,
   transcriptExtractor,
   transcriptPreviewText,
@@ -168,7 +182,20 @@ export function AITabs({
         role="tabpanel"
       >
         {activeTab === "Summary" ? (
-          <SummaryTab shellState={shellStates.summary} />
+          <SummaryTab
+            items={
+              jobStage === "summary_generated"
+                ? [
+                    "A summary shell preview is now available from the backend pipeline.",
+                    "The current output is still lightweight and will later expand into richer summary sections and live updates.",
+                    "Mind map and Ask AI can now build on persisted transcript and summary shells.",
+                  ]
+                : undefined
+            }
+            keyPointsCount={summaryKeyPointsCount}
+            previewText={summaryPreviewText}
+            shellState={summaryStatus === "failed" ? "failed" : shellStates.summary}
+          />
         ) : null}
         {activeTab === "Transcript" ? (
           <TranscriptTab

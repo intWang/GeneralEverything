@@ -10,6 +10,8 @@ export type TabShellState =
 type SummaryTabProps = {
   shellState?: TabShellState;
   items?: readonly string[];
+  keyPointsCount?: number | null;
+  previewText?: string | null;
 };
 
 const DEFAULT_ITEMS = [
@@ -56,6 +58,8 @@ const SHELL_COPY: Record<
 export function SummaryTab({
   shellState = "queued",
   items = DEFAULT_ITEMS,
+  keyPointsCount,
+  previewText,
 }: SummaryTabProps) {
   const copy = SHELL_COPY[shellState];
 
@@ -68,6 +72,14 @@ export function SummaryTab({
       <p className={styles.tabSectionBody}>
         {copy.body}
       </p>
+      {keyPointsCount !== null && keyPointsCount !== undefined ? (
+        <ul className={styles.tabHintList}>
+          <li className={styles.tabHintItem}>Key point shells ready: {keyPointsCount}</li>
+          {previewText ? (
+            <li className={styles.tabHintItem}>Preview: {previewText}</li>
+          ) : null}
+        </ul>
+      ) : null}
       <ul className={styles.tabHintList}>
         {items.map((item) => (
           <li className={styles.tabHintItem} key={item}>

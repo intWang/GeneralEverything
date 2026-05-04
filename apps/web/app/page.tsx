@@ -64,6 +64,8 @@ function buildTimelineItems(jobState: JobRecord) {
       "Audio extraction is complete and the transcript shell is ready to hand off into speech recognition.",
     transcript_generated:
       "A lightweight transcript shell has been generated and persisted, so downstream summary stages can start from real transcript context.",
+    summary_generated:
+      "A summary shell preview has been generated from transcript context and persisted for downstream mind map and QA stages.",
   };
 
   const primaryLabelByStage: Record<string, string> = {
@@ -74,6 +76,7 @@ function buildTimelineItems(jobState: JobRecord) {
     download_ready: `Job ${jobState.id} is ready for the download step.`,
     transcript_ready: `Job ${jobState.id} is ready for transcript generation.`,
     transcript_generated: `Job ${jobState.id} generated a transcript shell preview.`,
+    summary_generated: `Job ${jobState.id} generated a summary shell preview.`,
   };
 
   return [
@@ -107,6 +110,8 @@ function buildTimelineItems(jobState: JobRecord) {
           ? "Audio is extracted and the transcript shell is now ready for the next speech-recognition step."
           : jobState.stage === "transcript_generated"
           ? "A first transcript shell preview is available, while richer transcript generation and downstream summary stages remain in progress."
+          : jobState.stage === "summary_generated"
+          ? "A first summary shell preview is available, while mind map and Ask AI are still waiting for richer downstream generation."
           : jobState.stage === "download_ready"
           ? "The download shell is complete and the workflow is now preparing the transcript stage."
           : "Transcript, summary, mind map, and Ask AI will activate after the download stage is ready.",
@@ -343,6 +348,9 @@ export default function HomePage() {
                 activeJobId={jobState.id}
                 jobStage={jobState.stage}
                 jobStatus={jobState.status}
+                summaryKeyPointsCount={jobState.summary_key_points_count}
+                summaryPreviewText={jobState.summary_preview_text}
+                summaryStatus={jobState.summary_status}
                 transcriptAudioArtifactPath={jobState.transcript_audio_artifact_path}
                 transcriptExtractor={jobState.transcript_extractor}
                 transcriptPreviewText={jobState.transcript_preview_text}

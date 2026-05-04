@@ -412,6 +412,61 @@ test("shows transcript-generated timeline and preview details for a hydrated job
   ).toBeInTheDocument();
 });
 
+test("shows summary-generated timeline and summary preview details for a hydrated job", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T13:50:00Z",
+    id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+    input_mode: "public_video",
+    source_url: "https://example.com/summary-generated",
+    stage: "summary_generated",
+    status: "running",
+    summary_key_points_count: 2,
+    summary_preview_text: "Summary shell generated from transcript preview.",
+    summary_status: "ready",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T13:50:00Z",
+      id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+      input_mode: "public_video",
+      source_url: "https://example.com/summary-generated",
+      stage: "summary_generated",
+      status: "running",
+      summary_key_points_count: 2,
+      summary_preview_text: "Summary shell generated from transcript preview.",
+      summary_status: "ready",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa generated a summary shell preview.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByText(
+      "A first summary shell preview is available, while mind map and Ask AI are still waiting for richer downstream generation.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Key point shells ready: 2")).toBeInTheDocument();
+  expect(
+    screen.getByText("Preview: Summary shell generated from transcript preview."),
+  ).toBeInTheDocument();
+});
+
 test("hydrates a revisited job from the URL query", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);

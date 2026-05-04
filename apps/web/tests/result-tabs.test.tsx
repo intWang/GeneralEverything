@@ -211,3 +211,25 @@ test("shows transcript-generated shell preview details", () => {
     ),
   ).toBeInTheDocument();
 });
+
+test("shows summary-generated shell preview details", () => {
+  render(
+    <AITabs
+      jobStage="summary_generated"
+      jobStatus="running"
+      summaryKeyPointsCount={2}
+      summaryPreviewText="Summary shell generated from transcript preview."
+      summaryStatus="ready"
+    />,
+  );
+
+  expect(
+    screen.getByText("Summary is growing with each stable transcript window"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Key point shells ready: 2"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Preview: Summary shell generated from transcript preview."),
+  ).toBeInTheDocument();
+});
