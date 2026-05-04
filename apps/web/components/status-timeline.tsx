@@ -21,14 +21,16 @@ const DEFAULT_ITEMS: TimelineItem[] = [
 
 type StatusTimelineProps = {
   items?: TimelineItem[];
+  title?: string;
 };
 
 export function StatusTimeline({
   items = DEFAULT_ITEMS,
+  title = "Status timeline",
 }: StatusTimelineProps) {
   return (
     <section aria-label="Analysis status" className={styles.panel}>
-      <h2 className={styles.panelTitle}>Status timeline</h2>
+      <h2 className={styles.panelTitle}>{title}</h2>
       <ol className={styles.timeline}>
         {items.map((item) => (
           <li

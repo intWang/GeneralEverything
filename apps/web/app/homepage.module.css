@@ -140,6 +140,35 @@
   color: #475569;
 }
 
+.modeNotice {
+  padding: 1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+
+.modeNoticeTitle {
+  margin: 0;
+  font-weight: 600;
+}
+
+.modeNoticeBody {
+  margin: 0.5rem 0 0;
+  color: #475569;
+}
+
+.secondaryButton {
+  margin-top: 0.75rem;
+  width: fit-content;
+  padding: 0.85rem 1.25rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  font: inherit;
+  font-weight: 600;
+}
+
 .panel {
   padding: 1rem;
   border: 1px solid #cbd5e1;

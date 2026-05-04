@@ -1,6 +1,6 @@
 import styles from "../app/homepage.module.css";
 
-const DEFAULT_TABS = ["Summary", "Chapters", "Action Items"] as const;
+const DEFAULT_TABS = ["Summary", "Transcript", "Mind Map", "Ask AI"] as const;
 
 type AITabsProps = {
   tabs?: readonly string[];
@@ -24,7 +24,7 @@ export function AITabs({ tabs = DEFAULT_TABS }: AITabsProps) {
         ))}
       </div>
       <div className={styles.tabPanel} role="tabpanel">
-        Summaries, chaptering, and follow-up actions will appear here in Task 10.
+        Transcript, summary, mind map, and Ask AI states will stream in here in Task 10.
       </div>
     </section>
   );

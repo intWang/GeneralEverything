@@ -45,6 +45,21 @@ export function AnalyzeForm({
 
   return (
     <form className={styles.formCard} onSubmit={handleSubmit}>
+      {inputMode === "ringcentral_recording" ? (
+        <div className={styles.modeNotice}>
+          <p className={styles.modeNoticeTitle}>RingCentral workspace</p>
+          <p className={styles.modeNoticeBody}>
+            RingCentral connection will be added in a later task.
+          </p>
+          <button
+            className={styles.secondaryButton}
+            disabled
+            type="button"
+          >
+            Connect RingCentral (coming soon)
+          </button>
+        </div>
+      ) : null}
       <label className={styles.fieldLabel} htmlFor="source-url">
         Video source
       </label>
