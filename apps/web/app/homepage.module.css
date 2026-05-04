@@ -43,6 +43,17 @@
   padding: 0 1.5rem 4rem;
 }
 
+.workflowLayout {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.workflowPanels {
+  display: grid;
+  gap: 1rem;
+}
+
 .sectionLabel {
   margin-bottom: 0.75rem;
   font-weight: 600;
@@ -84,4 +95,136 @@
 
 .workspaceDescription {
   margin: 0.5rem 0 0;
+}
+
+.formCard {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #ffffff;
+}
+
+.fieldLabel {
+  font-weight: 600;
+}
+
+.textInput {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  font: inherit;
+}
+
+.primaryButton {
+  width: fit-content;
+  padding: 0.85rem 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: #0ea5e9;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primaryButton:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.formFeedback {
+  margin: 0;
+  color: #475569;
+}
+
+.panel {
+  padding: 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #ffffff;
+}
+
+.panelTitle {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.timeline {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+  color: #475569;
+}
+
+.timelineItem + .timelineItem {
+  margin-top: 0.75rem;
+}
+
+.timelineLabel {
+  margin: 0;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.timelineDetail {
+  margin: 0.25rem 0 0;
+}
+
+.infoGrid {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+}
+
+.infoLabel {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.infoValue {
+  margin: 0.25rem 0 0;
+  font-weight: 600;
+}
+
+.tabList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.tabButton {
+  padding: 0.6rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 600;
+}
+
+.tabPanel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  color: #475569;
+}
+
+@media (min-width: 60rem) {
+  .workflowLayout {
+    grid-template-columns: minmax(0, 24rem) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .workflowPanels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .workflowPanels > :last-child {
+    grid-column: 1 / -1;
+  }
 }

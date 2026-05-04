@@ -1,0 +1,70 @@
+"use client";
+
+import { type FormEvent, useState } from "react";
+
+import styles from "../app/homepage.module.css";
+import { createJob, type CreateJobResponse } from "../lib/api";
+import type { InputMode } from "../lib/types";
+
+type AnalyzeFormProps = {
+  inputMode: InputMode;
+  onJobCreated?: (job: CreateJobResponse) => void;
+};
+
+export function AnalyzeForm({
+  inputMode,
+  onJobCreated,
+}: AnalyzeFormProps) {
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!sourceUrl.trim()) {
+      setFeedback("Paste a video URL to begin.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setFeedback(null);
+
+    try {
+      const job = await createJob(inputMode, sourceUrl.trim());
+      setFeedback("Analysis requested. Live status will appear below.");
+      onJobCreated?.(job);
+    } catch (error) {
+      setFeedback(
+        error instanceof Error ? error.message : "Failed to create job",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form className={styles.formCard} onSubmit={handleSubmit}>
+      <label className={styles.fieldLabel} htmlFor="source-url">
+        Video source
+      </label>
+      <input
+        className={styles.textInput}
+        id="source-url"
+        name="sourceUrl"
+        onChange={(event) => setSourceUrl(event.target.value)}
+        placeholder="Paste a video URL"
+        value={sourceUrl}
+      />
+      <input name="inputMode" type="hidden" value={inputMode} />
+      <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
+        {isSubmitting ? "Analyzing..." : "Analyze"}
+      </button>
+      {feedback ? (
+        <p aria-live="polite" className={styles.formFeedback}>
+          {feedback}
+        </p>
+      ) : null}
+    </form>
+  );
+}
