@@ -524,7 +524,7 @@ export default function HomePage() {
         </div>
       </header>
       <Hero />
-      <HomepageSections hasActiveJob={!!jobState} />
+      <HomepageSections />
       <section className={styles.content} id="analysis-entry">
         <div style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
           <p className={styles.eyebrow} style={{ marginBottom: 0 }}>

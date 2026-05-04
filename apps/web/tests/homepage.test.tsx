@@ -159,10 +159,10 @@ test("reveals the workflow panels after creating a job", async () => {
   });
 
   expect(getJob).toHaveBeenCalledWith("11111111-1111-1111-1111-111111111111");
-  expect(screen.getByText("Summary")).toBeInTheDocument();
-  expect(screen.getByText("Transcript")).toBeInTheDocument();
-  expect(screen.getByText("Mind Map")).toBeInTheDocument();
-  expect(screen.getByText("Ask AI")).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Summary" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Transcript" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Mind Map" })).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Ask AI" })).toBeInTheDocument();
   expect(
     screen.getByText(
       "Job 11111111-1111-1111-1111-111111111111 is queued for analysis.",
