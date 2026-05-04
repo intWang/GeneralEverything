@@ -20,6 +20,11 @@ from app.services.transcripts.public_video import (
     execute_public_video_transcript_shell,
     prepare_public_video_transcript_shell,
 )
+from app.services.summaries.public_video import (
+    PublicVideoSummaryShell,
+    PublicVideoSummaryShellError,
+    generate_public_video_summary_shell,
+)
 from sqlalchemy.orm import object_session
 
 
@@ -91,6 +96,23 @@ def _mark_public_video_transcript_execution_failure(
     job.transcript_status = "failed"
 
 
+def _apply_public_video_summary_shell(
+    job,
+    summary_shell: PublicVideoSummaryShell,
+) -> None:
+    job.summary_status = summary_shell.status
+    job.summary_preview_text = summary_shell.preview_text
+    job.summary_key_points_count = summary_shell.key_points_count
+    job.status = JobStatus.RUNNING
+    job.stage = summary_shell.stage
+
+
+def _mark_public_video_summary_failure(job, exc: PublicVideoSummaryShellError) -> None:
+    job.status = JobStatus.FAILED
+    job.stage = exc.reason
+    job.summary_status = "failed"
+
+
 def _persist_loaded_job(job) -> None:
     session = object_session(job)
     if session is None:
@@ -153,6 +175,43 @@ async def _execute_public_video_download(
         publisher,
         "video.download",
         {"job_id": str(job_id), "download": download_shell.model_dump()},
+    )
+    await _publish_event(
+        publisher,
+        "job.status",
+        {
+            "job_id": str(job_id),
+            "status": job.status.value,
+            "stage": job.stage,
+        },
+    )
+
+    generate_summary_shell = (
+        ctx.get("generate_public_video_summary_shell")
+        or generate_public_video_summary_shell
+    )
+    try:
+        summary_shell = await _resolve(generate_summary_shell(job))
+    except PublicVideoSummaryShellError as exc:
+        _mark_public_video_summary_failure(job, exc)
+        await _resolve(persist_job(job))
+        await _publish_event(
+            publisher,
+            "error",
+            {
+                "job_id": str(job_id),
+                "reason": exc.reason,
+                "message": exc.message,
+            },
+        )
+        return
+
+    _apply_public_video_summary_shell(job, summary_shell)
+    await _resolve(persist_job(job))
+    await _publish_event(
+        publisher,
+        "summary.shell",
+        {"job_id": str(job_id), "summary": summary_shell.model_dump()},
     )
     await _publish_event(
         publisher,

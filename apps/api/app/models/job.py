@@ -44,6 +44,9 @@ class AnalysisJob(Base):
     transcript_audio_artifact_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_preview_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_segment_count: Mapped[int | None] = mapped_column(nullable=True)
+    summary_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    summary_preview_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_key_points_count: Mapped[int | None] = mapped_column(nullable=True)
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, name="job_status"),
         default=JobStatus.QUEUED,
