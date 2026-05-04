@@ -16,6 +16,11 @@ class JobResponse(BaseModel):
     id: uuid.UUID
     input_mode: InputMode
     source_url: HttpUrl
+    title: str | None
+    duration_seconds: int | None
+    thumbnail_url: HttpUrl | None
+    source_name: str | None
+    description: str | None
     status: JobStatus
     stage: str
     created_at: datetime

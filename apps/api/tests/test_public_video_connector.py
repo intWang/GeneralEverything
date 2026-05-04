@@ -83,8 +83,46 @@ def test_probe_public_video_metadata_raises_normalized_error() -> None:
         raise AssertionError("Expected PublicVideoProbeError")
 
 
+def test_probe_public_video_metadata_raises_tool_missing_error() -> None:
+    def run_probe(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(command[0])
+
+    try:
+        probe_public_video_metadata(
+            "https://example.com/video",
+            run_probe=run_probe,
+        )
+    except PublicVideoProbeError as exc:
+        assert exc.reason == "tool_missing"
+        assert "yt-dlp" in exc.message
+    else:
+        raise AssertionError("Expected PublicVideoProbeError")
+
+
+def test_probe_public_video_metadata_raises_invalid_output_error() -> None:
+    def run_probe(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout="{not-json",
+            stderr="",
+        )
+
+    try:
+        probe_public_video_metadata(
+            "https://example.com/video",
+            run_probe=run_probe,
+        )
+    except PublicVideoProbeError as exc:
+        assert exc.reason == "invalid_output"
+        assert "malformed" in exc.message
+    else:
+        raise AssertionError("Expected PublicVideoProbeError")
+
+
 def test_process_analysis_job_publishes_probed_metadata_event() -> None:
     calls = []
+    persisted_jobs = []
     job = AnalysisJob(
         id=UUID("12345678-1234-5678-1234-567812345678"),
         input_mode=InputMode.PUBLIC_VIDEO,
@@ -110,11 +148,15 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
             description="A short description",
         )
 
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_jobs.append(updated_job)
+
     asyncio.run(
         process_analysis_job(
             {
                 "publish": publish,
                 "load_job": load_job,
+                "persist_job": persist_job,
                 "probe_public_video_metadata": probe_metadata,
             },
             UUID("12345678-1234-5678-1234-567812345678"),
@@ -136,10 +178,19 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
             },
         )
     ]
+    assert persisted_jobs == [job]
+    assert job.title == "Sample Video"
+    assert job.duration_seconds == 120
+    assert job.thumbnail_url == "https://example.com/thumb.jpg"
+    assert job.source_name == "Example Channel"
+    assert job.description == "A short description"
+    assert job.status == JobStatus.RUNNING
+    assert job.stage == "metadata_ready"
 
 
 def test_process_analysis_job_publishes_normalized_probe_error() -> None:
     calls = []
+    persisted_jobs = []
     job = AnalysisJob(
         id=UUID("12345678-1234-5678-1234-567812345678"),
         input_mode=InputMode.PUBLIC_VIDEO,
@@ -161,11 +212,15 @@ def test_process_analysis_job_publishes_normalized_probe_error() -> None:
             message="ERROR: Unsupported URL",
         )
 
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_jobs.append(updated_job)
+
     asyncio.run(
         process_analysis_job(
             {
                 "publish": publish,
                 "load_job": load_job,
+                "persist_job": persist_job,
                 "probe_public_video_metadata": probe_metadata,
             },
             UUID("12345678-1234-5678-1234-567812345678"),
@@ -182,3 +237,75 @@ def test_process_analysis_job_publishes_normalized_probe_error() -> None:
             },
         )
     ]
+    assert persisted_jobs == [job]
+    assert job.status == JobStatus.FAILED
+    assert job.stage == "unsupported_url"
+
+
+def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
+    calls = []
+    job = AnalysisJob(
+        id=UUID("12345678-1234-5678-1234-567812345678"),
+        input_mode=InputMode.PUBLIC_VIDEO,
+        source_url="https://example.com/video",
+        status=JobStatus.RUNNING,
+        stage="metadata_ready",
+        title="Already Probed",
+    )
+
+    def publish(event_name: str, payload: dict) -> None:
+        calls.append((event_name, payload))
+
+    def load_job(requested_job_id: UUID) -> AnalysisJob:
+        assert requested_job_id == job.id
+        return job
+
+    def probe_metadata(_source_url: str) -> VideoMetadata:
+        raise AssertionError("probe should not run when metadata is already ready")
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": publish,
+                "load_job": load_job,
+                "probe_public_video_metadata": probe_metadata,
+            },
+            UUID("12345678-1234-5678-1234-567812345678"),
+        )
+    )
+
+    assert calls == []
+
+
+def test_process_analysis_job_skips_reprobe_when_job_failed() -> None:
+    calls = []
+    job = AnalysisJob(
+        id=UUID("12345678-1234-5678-1234-567812345678"),
+        input_mode=InputMode.PUBLIC_VIDEO,
+        source_url="https://example.com/video",
+        status=JobStatus.FAILED,
+        stage="unsupported_url",
+    )
+
+    def publish(event_name: str, payload: dict) -> None:
+        calls.append((event_name, payload))
+
+    def load_job(requested_job_id: UUID) -> AnalysisJob:
+        assert requested_job_id == job.id
+        return job
+
+    def probe_metadata(_source_url: str) -> VideoMetadata:
+        raise AssertionError("probe should not run when job is already failed")
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": publish,
+                "load_job": load_job,
+                "probe_public_video_metadata": probe_metadata,
+            },
+            UUID("12345678-1234-5678-1234-567812345678"),
+        )
+    )
+
+    assert calls == []

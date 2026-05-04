@@ -197,20 +197,30 @@ test("hydrates a revisited job from the URL query", async () => {
   );
   getJob.mockResolvedValue({
     created_at: "2026-05-04T10:00:00Z",
+    description: "A saved metadata shell from the probe step.",
+    duration_seconds: 754,
     id: "22222222-2222-2222-2222-222222222222",
     input_mode: "public_video",
+    source_name: "OpenAI Channel",
     source_url: "https://example.com/revisit",
     stage: "queued",
     status: "running",
+    thumbnail_url: "https://example.com/revisit-thumb.jpg",
+    title: "Revisited metadata shell",
   });
   listJobs.mockResolvedValue([
     {
       created_at: "2026-05-04T10:00:00Z",
+      description: "A saved metadata shell from the probe step.",
+      duration_seconds: 754,
       id: "22222222-2222-2222-2222-222222222222",
       input_mode: "public_video",
+      source_name: "OpenAI Channel",
       source_url: "https://example.com/revisit",
       stage: "queued",
       status: "running",
+      thumbnail_url: "https://example.com/revisit-thumb.jpg",
+      title: "Revisited metadata shell",
     },
   ]);
 
@@ -228,6 +238,16 @@ test("hydrates a revisited job from the URL query", async () => {
   expect(
     screen.getByRole("button", { name: /https:\/\/example.com\/revisit/i }),
   ).toBeInTheDocument();
+  expect(screen.getByText("Revisited metadata shell")).toBeInTheDocument();
+  expect(screen.getByText("OpenAI Channel")).toBeInTheDocument();
+  expect(screen.getByText("Example")).toBeInTheDocument();
+  expect(screen.getByText("12:34")).toBeInTheDocument();
+  expect(
+    screen.getByText("A saved metadata shell from the probe step."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("img", { name: "Revisited metadata shell" }),
+  ).toHaveAttribute("src", "https://example.com/revisit-thumb.jpg");
   fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
   expect(
     screen.getByText("Transcript is streaming provisional lines"),

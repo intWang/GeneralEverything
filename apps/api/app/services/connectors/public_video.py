@@ -35,12 +35,18 @@ def probe_public_video_metadata(
     run_probe=subprocess.run,
 ) -> VideoMetadata:
     command = build_yt_dlp_probe_command(source_url)
-    result = run_probe(
-        command,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = run_probe(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise PublicVideoProbeError(
+            reason="tool_missing",
+            message="yt-dlp is not installed or not available on PATH",
+        ) from exc
 
     if result.returncode != 0:
         stderr = (result.stderr or "").strip()
@@ -50,5 +56,11 @@ def probe_public_video_metadata(
             message=stderr or "yt-dlp metadata probe failed",
         )
 
-    payload = json.loads(result.stdout or "{}")
+    try:
+        payload = json.loads(result.stdout or "{}")
+    except json.JSONDecodeError as exc:
+        raise PublicVideoProbeError(
+            reason="invalid_output",
+            message="yt-dlp returned malformed metadata output",
+        ) from exc
     return normalize_yt_dlp_metadata(payload)

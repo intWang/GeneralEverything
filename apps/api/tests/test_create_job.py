@@ -8,9 +8,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.routes import jobs as jobs_routes
 from app.db import get_session
 from app.main import app
 from app.models.job import AnalysisJob
+from app.schemas.video_metadata import VideoMetadata
 
 API_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI_PATH = API_ROOT / "alembic.ini"
@@ -49,26 +51,44 @@ def make_test_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]
 def test_create_job_returns_pending_job(tmp_path) -> None:
     client, testing_session = make_test_client(tmp_path)
 
-    response = client.post(
-        "/api/jobs",
-        json={
-            "source_url": "https://example.com/video",
-        },
+    original_probe = jobs_routes.probe_public_video_metadata
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
     )
 
-    app.dependency_overrides.clear()
+    try:
+        response = client.post(
+            "/api/jobs",
+            json={
+                "source_url": "https://example.com/video",
+            },
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        app.dependency_overrides.clear()
 
     body = response.json()
     assert response.status_code == 201
     assert body["input_mode"] == "public_video"
-    assert body["status"] == "queued"
+    assert body["status"] == "running"
+    assert body["stage"] == "metadata_ready"
     assert body["source_url"] == "https://example.com/video"
+    assert body["title"] == "Sample Video"
+    assert body["duration_seconds"] == 120
+    assert body["thumbnail_url"] == "https://example.com/thumb.jpg"
+    assert body["source_name"] == "Example Channel"
+    assert body["description"] == "A short description"
 
     with testing_session() as session:
         persisted_job = session.query(AnalysisJob).one()
 
     assert str(persisted_job.id) == body["id"]
-    assert persisted_job.stage == "queued"
+    assert persisted_job.stage == "metadata_ready"
+    assert persisted_job.title == "Sample Video"
     assert persisted_job.created_at is not None
 
 
@@ -99,25 +119,75 @@ def test_create_job_detects_ringcentral_recording_url(tmp_path) -> None:
     assert persisted_job.input_mode.value == "ringcentral_recording"
 
 
+def test_create_job_returns_failed_shell_when_probe_fails(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+
+    def raise_probe_error(_source_url: str) -> VideoMetadata:
+        raise jobs_routes.PublicVideoProbeError(
+            reason="unsupported_url",
+            message="ERROR: Unsupported URL",
+        )
+
+    jobs_routes.probe_public_video_metadata = raise_probe_error
+
+    try:
+        response = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        app.dependency_overrides.clear()
+
+    body = response.json()
+    assert response.status_code == 201
+    assert body["status"] == "failed"
+    assert body["stage"] == "unsupported_url"
+    assert body["title"] is None
+    assert body["thumbnail_url"] is None
+
+    with testing_session() as session:
+        persisted_job = session.query(AnalysisJob).one()
+
+    assert persisted_job.status.value == "failed"
+    assert persisted_job.stage == "unsupported_url"
+    assert persisted_job.title is None
+
+
 def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
     client, _testing_session = make_test_client(tmp_path)
 
-    created = client.post(
-        "/api/jobs",
-        json={"source_url": "https://example.com/video"},
+    original_probe = jobs_routes.probe_public_video_metadata
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
     )
-    job_id = created.json()["id"]
 
-    response = client.get(f"/api/jobs/{job_id}")
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
 
-    app.dependency_overrides.clear()
+        response = client.get(f"/api/jobs/{job_id}")
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        app.dependency_overrides.clear()
 
     body = response.json()
     assert response.status_code == 200
     assert body["id"] == job_id
     assert body["input_mode"] == "public_video"
-    assert body["status"] == "queued"
-    assert body["stage"] == "queued"
+    assert body["status"] == "running"
+    assert body["stage"] == "metadata_ready"
+    assert body["title"] == "Sample Video"
+    assert body["thumbnail_url"] == "https://example.com/thumb.jpg"
     assert body["created_at"]
 
 
@@ -135,14 +205,26 @@ def test_get_job_returns_404_when_missing(tmp_path) -> None:
 def test_list_jobs_returns_recent_jobs_first(tmp_path) -> None:
     client, testing_session = make_test_client(tmp_path)
 
-    first = client.post(
-        "/api/jobs",
-        json={"source_url": "https://example.com/first"},
-    ).json()
-    second = client.post(
-        "/api/jobs",
-        json={"source_url": "https://example.com/second"},
-    ).json()
+    original_probe = jobs_routes.probe_public_video_metadata
+    jobs_routes.probe_public_video_metadata = lambda source_url: VideoMetadata(
+        title=f"Title for {source_url.rsplit('/', 1)[-1]}",
+        duration_seconds=90 if source_url.endswith("first") else 180,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description=f"Description for {source_url.rsplit('/', 1)[-1]}",
+    )
+
+    try:
+        first = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/first"},
+        ).json()
+        second = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/second"},
+        ).json()
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
 
     with testing_session() as session:
         jobs = session.query(AnalysisJob).order_by(AnalysisJob.source_url).all()
@@ -159,3 +241,9 @@ def test_list_jobs_returns_recent_jobs_first(tmp_path) -> None:
     assert [item["id"] for item in body] == [second["id"], first["id"]]
     assert body[0]["source_url"] == "https://example.com/second"
     assert body[1]["source_url"] == "https://example.com/first"
+    assert body[0]["title"] == "Title for second"
+    assert body[0]["duration_seconds"] == 180
+    assert body[0]["thumbnail_url"] == "https://example.com/thumb.jpg"
+    assert body[0]["source_name"] == "Example Channel"
+    assert body[0]["description"] == "Description for second"
+    assert body[1]["title"] == "Title for first"

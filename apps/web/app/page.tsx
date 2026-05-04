@@ -206,7 +206,10 @@ export default function HomePage() {
                         }}
                         type="button"
                       >
-                        <span>{job.source_url}</span>
+                        <span>{job.title || job.source_url}</span>
+                        <span style={{ color: "#475569", fontSize: "0.875rem" }}>
+                          {job.source_url}
+                        </span>
                         <span style={{ color: "#475569", fontSize: "0.875rem" }}>
                           {job.status} • {job.stage}
                         </span>
@@ -246,8 +249,14 @@ export default function HomePage() {
                 ]}
               />
               <VideoInfoPanel
+                description={jobState.description}
+                durationSeconds={jobState.duration_seconds}
+                inputMode={jobState.input_mode}
                 jobId={jobState.id}
-                sourceLabel={jobState.source_url}
+                sourceName={jobState.source_name}
+                sourceUrl={jobState.source_url}
+                thumbnailUrl={jobState.thumbnail_url}
+                title={jobState.title}
               />
               <AITabs
                 activeJobId={jobState.id}

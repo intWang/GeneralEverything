@@ -6,8 +6,12 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.models.job import AnalysisJob
+from app.models.job import AnalysisJob, InputMode, JobStatus
 from app.schemas.jobs import CreateJobRequest, JobResponse
+from app.services.connectors.public_video import (
+    PublicVideoProbeError,
+    probe_public_video_metadata,
+)
 from app.services.ingestion import detect_source_type
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
@@ -26,6 +30,26 @@ def create_job(
     session.add(job)
     session.commit()
     session.refresh(job)
+
+    if job.input_mode == InputMode.PUBLIC_VIDEO:
+        try:
+            metadata = probe_public_video_metadata(job.source_url)
+        except PublicVideoProbeError as exc:
+            job.status = JobStatus.FAILED
+            job.stage = exc.reason
+        else:
+            job.title = metadata.title
+            job.duration_seconds = metadata.duration_seconds
+            job.thumbnail_url = metadata.thumbnail_url
+            job.source_name = metadata.source_name
+            job.description = metadata.description
+            job.status = JobStatus.RUNNING
+            job.stage = "metadata_ready"
+
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+
     return job
 
 
