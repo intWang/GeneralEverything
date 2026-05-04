@@ -1,7 +1,7 @@
-import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
+import HomePage from "../app/page";
 import * as api from "../lib/api";
 import * as sse from "../lib/sse";
 
@@ -15,9 +15,6 @@ vi.mock("../lib/api", () => ({
 vi.mock("../lib/sse", () => ({
   subscribeToJobEvents: vi.fn(),
 }));
-
-globalThis.React = React;
-const { default: HomePage } = await import("../app/page");
 
 beforeEach(() => {
   vi.clearAllMocks();
