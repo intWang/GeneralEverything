@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
 import HomePage from "../app/page";
+import { buildAskAiMockReferences } from "./ask-ai-test-helpers";
 import * as api from "../lib/api";
 import * as sse from "../lib/sse";
 
@@ -34,11 +35,7 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
     grounded: true,
     job_id: "55555555-5555-5555-5555-555555555555",
     question: "What should I review next?",
-    references: [
-      "Transcript: Transcript shell generated for homepage.wav.",
-      "Summary: Summary shell generated from transcript preview.",
-      "Mind map: Mind map shell generated from summary preview.",
-    ],
+    references: buildAskAiMockReferences("homepage.wav"),
   });
 
   window.history.replaceState(
@@ -97,7 +94,9 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
   ).toBeInTheDocument();
   expect(screen.getByText("References")).toBeInTheDocument();
   expect(
-    screen.getByText("Transcript: Transcript shell generated for homepage.wav."),
+    screen.getByText(
+      buildAskAiMockReferences("homepage.wav")[0],
+    ),
   ).toBeInTheDocument();
 });
 

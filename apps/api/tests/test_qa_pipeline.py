@@ -1,5 +1,5 @@
 from app.models import JobStatus
-from app.services.qa_pipeline import describe_qa_shell, qa_is_ready
+from app.services.qa_pipeline import _build_reference, describe_qa_shell, qa_is_ready
 
 
 def test_qa_requires_three_or_more_grounded_chunks() -> None:
@@ -71,3 +71,25 @@ def test_qa_shell_blocks_failed_jobs() -> None:
     assert shell.grounding_status == "unavailable"
     assert shell.answer_placeholder == "blocked"
     assert shell.can_submit is False
+
+
+def test_build_reference_truncates_long_preview_text() -> None:
+    preview_text = (
+        "Transcript shell generated for sample.wav. It captures a longer "
+        "explanation so Ask AI references stay compact in the workspace."
+    )
+
+    assert _build_reference("Transcript", preview_text) == (
+        "Transcript: Transcript shell generated for sample.wav. "
+        "It captures a longer expla..."
+    )
+
+
+def test_build_reference_keeps_exact_threshold_without_ellipsis() -> None:
+    preview_text = "x" * 72
+
+    assert _build_reference("Transcript", preview_text) == f"Transcript: {preview_text}"
+
+
+def test_build_reference_falls_back_when_preview_is_whitespace() -> None:
+    assert _build_reference("Summary", "   \n\t  ") == "Summary: shell preview unavailable"

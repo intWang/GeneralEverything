@@ -299,11 +299,20 @@ def test_submit_job_question_returns_grounded_answer_shell(tmp_path) -> None:
             persisted_job.stage = "mindmap_generated"
             persisted_job.status = jobs_routes.JobStatus.RUNNING
             persisted_job.transcript_segment_count = 3
-            persisted_job.transcript_preview_text = "Transcript shell generated for sample.wav."
+            persisted_job.transcript_preview_text = (
+                "Transcript shell generated for sample.wav. It captures a longer "
+                "explanation so Ask AI references stay compact in the workspace."
+            )
             persisted_job.summary_status = "ready"
-            persisted_job.summary_preview_text = "Summary shell generated from transcript preview."
+            persisted_job.summary_preview_text = (
+                "Summary shell generated from transcript preview. It keeps enough "
+                "detail to demonstrate trimming in the reference cards."
+            )
             persisted_job.mindmap_status = "ready"
-            persisted_job.mindmap_preview_text = "Mind map shell generated from summary preview."
+            persisted_job.mindmap_preview_text = (
+                "Mind map shell generated from summary preview. It expands into "
+                "more context than the reference list should render in full."
+            )
             session.commit()
 
         response = client.post(
@@ -325,9 +334,9 @@ def test_submit_job_question_returns_grounded_answer_shell(tmp_path) -> None:
         "job_id": job_id,
         "question": "What should I review next?",
         "references": [
-            "Transcript: Transcript shell generated for sample.wav.",
-            "Summary: Summary shell generated from transcript preview.",
-            "Mind map: Mind map shell generated from summary preview.",
+            "Transcript: Transcript shell generated for sample.wav. It captures a longer expla...",
+            "Summary: Summary shell generated from transcript preview. It keeps enough deta...",
+            "Mind map: Mind map shell generated from summary preview. It expands into more c...",
         ],
     }
 

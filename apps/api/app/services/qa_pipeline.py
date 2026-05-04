@@ -7,6 +7,7 @@ from app.models import AnalysisJob, JobStatus
 QAShellState = Literal["queued", "processing", "complete", "failed"]
 GroundingStatus = str
 AnswerPlaceholderState = str
+REFERENCE_PREVIEW_MAX_CHARS = 72
 
 
 @dataclass(frozen=True)
@@ -31,7 +32,14 @@ class QAAnswerNotReadyError(RuntimeError):
 
 def _build_reference(label: str, preview_text: str | None) -> str:
     if preview_text:
-        return f"{label}: {preview_text.strip()}"
+        normalized_preview = " ".join(preview_text.split())
+        if normalized_preview:
+            if len(normalized_preview) > REFERENCE_PREVIEW_MAX_CHARS:
+                normalized_preview = (
+                    normalized_preview[: REFERENCE_PREVIEW_MAX_CHARS - 3].rstrip()
+                    + "..."
+                )
+            return f"{label}: {normalized_preview}"
 
     return f"{label}: shell preview unavailable"
 

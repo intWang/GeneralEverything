@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
+import { buildAskAiMockReferences } from "./ask-ai-test-helpers";
 import { AITabs } from "../components/ai-tabs";
 import * as api from "../lib/api";
 
@@ -222,11 +223,7 @@ test("submits a grounded Ask AI question and renders the backend answer shell", 
     grounded: true,
     job_id: "job-123",
     question: "What should I review next?",
-    references: [
-      "Transcript: Transcript shell generated for 222.wav.",
-      "Summary: Summary shell generated from transcript preview.",
-      "Mind map: Mind map shell generated from summary preview.",
-    ],
+    references: buildAskAiMockReferences("222.wav"),
   });
 
   render(
@@ -259,7 +256,9 @@ test("submits a grounded Ask AI question and renders the backend answer shell", 
   ).toBeInTheDocument();
   expect(screen.getByText("References")).toBeInTheDocument();
   expect(
-    screen.getByText("Transcript: Transcript shell generated for 222.wav."),
+    screen.getByText(
+      buildAskAiMockReferences("222.wav")[0],
+    ),
   ).toBeInTheDocument();
 });
 
