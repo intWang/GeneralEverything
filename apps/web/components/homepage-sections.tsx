@@ -71,7 +71,11 @@ const useCases = [
   },
 ];
 
-export function HomepageSections() {
+export function HomepageSections({
+  hasActiveJob = false,
+}: {
+  hasActiveJob?: boolean;
+}) {
   return (
     <>
       <section aria-label="Product value" className={styles.content}>
@@ -112,7 +116,16 @@ export function HomepageSections() {
         >
           {capabilities.map((capability) => (
             <article className={styles.panel} key={capability.title}>
-              <h3 className={styles.panelTitle}>{capability.title}</h3>
+              <h3 className={styles.panelTitle}>
+                {hasActiveJob
+                  ? {
+                      "Ask AI": "Ask AI follow-up",
+                      "Mind Map": "Mind map structure",
+                      Summary: "Summary prep",
+                      Transcript: "Transcript review",
+                    }[capability.title] ?? capability.title
+                  : capability.title}
+              </h3>
               <p className={styles.workspaceDescription}>
                 {capability.description}
               </p>
