@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import styles from "./homepage.module.css";
 import { AITabs } from "../components/ai-tabs";
@@ -184,6 +184,7 @@ export default function HomePage() {
   const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
   const [isHydrating, setIsHydrating] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const hydrationRequestIdRef = useRef(0);
 
   async function refreshHistory() {
     try {
@@ -221,6 +222,9 @@ export default function HomePage() {
       loadErrorMessage = "Unable to load the saved analysis shell.",
       syncUrlMode = false,
     } = options;
+    const requestId = hydrationRequestIdRef.current + 1;
+
+    hydrationRequestIdRef.current = requestId;
 
     setIsHydrating(true);
     setLoadError(null);
@@ -237,12 +241,20 @@ export default function HomePage() {
     try {
       const job = await getJob(jobId);
 
+      if (requestId !== hydrationRequestIdRef.current) {
+        return;
+      }
+
       setJobState((currentState) => mergeJobSnapshot(currentState, job));
       setInputMode(job.input_mode);
     } catch {
-      setLoadError(loadErrorMessage);
+      if (requestId === hydrationRequestIdRef.current) {
+        setLoadError(loadErrorMessage);
+      }
     } finally {
-      setIsHydrating(false);
+      if (requestId === hydrationRequestIdRef.current) {
+        setIsHydrating(false);
+      }
     }
   }
 
@@ -261,7 +273,9 @@ export default function HomePage() {
       const jobId = readJobIdFromUrl();
 
       if (!jobId) {
+        hydrationRequestIdRef.current += 1;
         setJobState(null);
+        setIsHydrating(false);
         setLoadError(null);
         return;
       }

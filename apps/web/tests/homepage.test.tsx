@@ -1080,3 +1080,99 @@ test("updates the URL and responds to browser navigation for job history", async
     ).toBeInTheDocument();
   });
 });
+
+test("ignores stale hydration responses when a newer history selection resolves first", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  let resolveFirstSelection:
+    | ((value: Awaited<ReturnType<typeof api.getJob>>) => void)
+    | undefined;
+  let resolveSecondSelection:
+    | ((value: Awaited<ReturnType<typeof api.getJob>>) => void)
+    | undefined;
+
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T09:00:00Z",
+      id: "11111111-1111-1111-1111-111111111111",
+      input_mode: "public_video",
+      source_url: "https://example.com/first",
+      stage: "queued",
+      status: "queued",
+    },
+    {
+      created_at: "2026-05-04T10:00:00Z",
+      id: "22222222-2222-2222-2222-222222222222",
+      input_mode: "public_video",
+      source_url: "https://example.com/second",
+      stage: "queued",
+      status: "running",
+    },
+  ]);
+  getJob.mockImplementation(
+    (jobId) =>
+      new Promise((resolve) => {
+        if (jobId === "11111111-1111-1111-1111-111111111111") {
+          resolveFirstSelection = resolve;
+          return;
+        }
+
+        resolveSecondSelection = resolve;
+      }),
+  );
+
+  render(<HomePage />);
+
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: /https:\/\/example.com\/first/i,
+    }),
+  );
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: /https:\/\/example.com\/second/i,
+    }),
+  );
+
+  resolveSecondSelection?.({
+    created_at: "2026-05-04T10:00:00Z",
+    id: "22222222-2222-2222-2222-222222222222",
+    input_mode: "public_video",
+    source_url: "https://example.com/second",
+    stage: "queued",
+    status: "running",
+    title: "Second selection wins",
+  });
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 22222222-2222-2222-2222-222222222222 is running for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+  expect(screen.getByText("Second selection wins")).toBeInTheDocument();
+  expect(window.location.search).toBe(
+    "?job=22222222-2222-2222-2222-222222222222",
+  );
+
+  resolveFirstSelection?.({
+    created_at: "2026-05-04T09:00:00Z",
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "public_video",
+    source_url: "https://example.com/first",
+    stage: "queued",
+    status: "queued",
+    title: "Late first selection",
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("Second selection wins")).toBeInTheDocument();
+  });
+  expect(screen.queryByText("Late first selection")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      "Job 11111111-1111-1111-1111-111111111111 is queued for analysis.",
+    ),
+  ).not.toBeInTheDocument();
+});
