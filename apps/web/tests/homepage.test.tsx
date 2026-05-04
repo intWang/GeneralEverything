@@ -282,6 +282,68 @@ test("shows download-ready timeline copy for a hydrated job", async () => {
   ).toBeInTheDocument();
 });
 
+test("shows transcript-ready timeline and transcript shell details for a hydrated job", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=88888888-8888-8888-8888-888888888888",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T13:30:00Z",
+    id: "88888888-8888-8888-8888-888888888888",
+    input_mode: "public_video",
+    source_url: "https://example.com/transcript-ready",
+    stage: "transcript_ready",
+    status: "running",
+    transcript_audio_artifact_path:
+      "var/transcripts/public-video/88888888-8888-8888-8888-888888888888.wav",
+    transcript_extractor: "ffmpeg",
+    transcript_status: "ready",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T13:30:00Z",
+      id: "88888888-8888-8888-8888-888888888888",
+      input_mode: "public_video",
+      source_url: "https://example.com/transcript-ready",
+      stage: "transcript_ready",
+      status: "running",
+      transcript_audio_artifact_path:
+        "var/transcripts/public-video/88888888-8888-8888-8888-888888888888.wav",
+      transcript_extractor: "ffmpeg",
+      transcript_status: "ready",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 88888888-8888-8888-8888-888888888888 is ready for transcript generation.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByText(
+      "Audio is extracted and the transcript shell is now ready for the next speech-recognition step.",
+    ),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(
+    screen.getByText(
+      "Audio artifact ready: var/transcripts/public-video/88888888-8888-8888-8888-888888888888.wav",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Extractor: ffmpeg")).toBeInTheDocument();
+});
+
 test("hydrates a revisited job from the URL query", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);

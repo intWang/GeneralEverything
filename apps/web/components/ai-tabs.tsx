@@ -7,7 +7,7 @@ import { AskAiTab, type AskAiShellState } from "./ask-ai-tab";
 import { MindMapTab } from "./mindmap-tab";
 import { SummaryTab } from "./summary-tab";
 import { TranscriptTab } from "./transcript-tab";
-import type { JobStatus } from "../lib/types";
+import type { JobRecord, JobStatus } from "../lib/types";
 import type { TabShellState } from "./summary-tab";
 
 const DEFAULT_TABS = ["Summary", "Transcript", "Mind Map", "Ask AI"] as const;
@@ -18,6 +18,9 @@ type AITabsProps = {
   activeJobId?: string;
   jobStage?: string;
   jobStatus?: JobStatus;
+  transcriptAudioArtifactPath?: JobRecord["transcript_audio_artifact_path"];
+  transcriptExtractor?: JobRecord["transcript_extractor"];
+  transcriptStatus?: JobRecord["transcript_status"];
   tabs?: readonly AITab[];
 };
 
@@ -42,6 +45,14 @@ function deriveTabShellStates(
   }
 
   if (jobStatus === "running") {
+    if (jobStage === "transcript_ready") {
+      return {
+        summary: "queued",
+        transcript: "processing",
+        mindmap: "queued",
+      };
+    }
+
     if (jobStage?.includes("transcript")) {
       return {
         summary: "queued",
@@ -107,6 +118,9 @@ export function AITabs({
   activeJobId,
   jobStage,
   jobStatus = "queued",
+  transcriptAudioArtifactPath,
+  transcriptExtractor,
+  transcriptStatus,
   tabs = DEFAULT_TABS,
 }: AITabsProps) {
   const [activeTab, setActiveTab] = useState<AITab>(tabs[0] ?? "Summary");
@@ -145,7 +159,22 @@ export function AITabs({
           <SummaryTab shellState={shellStates.summary} />
         ) : null}
         {activeTab === "Transcript" ? (
-          <TranscriptTab shellState={shellStates.transcript} />
+          <TranscriptTab
+            audioArtifactPath={transcriptAudioArtifactPath}
+            extractor={transcriptExtractor}
+            previewLines={
+              jobStage === "transcript_ready"
+                ? [
+                    "Audio extraction finished and the transcript worker shell is ready for speech recognition.",
+                    "Transcript text has not been generated yet, but the audio artifact is now available to the next stage.",
+                    "Summary and mind map remain queued until transcript generation starts.",
+                  ]
+                : undefined
+            }
+            shellState={
+              transcriptStatus === "failed" ? "failed" : shellStates.transcript
+            }
+          />
         ) : null}
         {activeTab === "Mind Map" ? (
           <MindMapTab shellState={shellStates.mindmap} />

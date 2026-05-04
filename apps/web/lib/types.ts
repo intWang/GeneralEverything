@@ -7,6 +7,7 @@ export type JobStage =
   | "queued_download"
   | "downloading"
   | "download_ready"
+  | "transcript_ready"
   | "generating_transcript"
   | "building_summary"
   | "building_mindmap"
@@ -22,6 +23,9 @@ export type JobRecord = {
   source_url: string;
   stage: JobStage;
   status: JobStatus;
+  transcript_audio_artifact_path?: string | null;
+  transcript_extractor?: string | null;
+  transcript_status?: string | null;
   thumbnail_url: string | null;
   title: string | null;
 };

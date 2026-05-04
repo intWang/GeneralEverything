@@ -2,6 +2,8 @@ import styles from "../app/homepage.module.css";
 import type { TabShellState } from "./summary-tab";
 
 type TranscriptTabProps = {
+  audioArtifactPath?: string | null;
+  extractor?: string | null;
   previewLines?: readonly string[];
   shellState?: TabShellState;
 };
@@ -48,6 +50,8 @@ const SHELL_COPY: Record<
 };
 
 export function TranscriptTab({
+  audioArtifactPath,
+  extractor,
   previewLines = DEFAULT_PREVIEW_LINES,
   shellState = "queued",
 }: TranscriptTabProps) {
@@ -62,6 +66,16 @@ export function TranscriptTab({
       <p className={styles.tabSectionBody}>
         {copy.body}
       </p>
+      {audioArtifactPath ? (
+        <div className={styles.transcriptPreview}>
+          <p className={styles.transcriptLine}>
+            Audio artifact ready: {audioArtifactPath}
+          </p>
+          <p className={styles.transcriptLine}>
+            Extractor: {extractor || "Pending extractor"}
+          </p>
+        </div>
+      ) : null}
       <div className={styles.transcriptPreview}>
         {previewLines.map((line) => (
           <p className={styles.transcriptLine} key={line}>

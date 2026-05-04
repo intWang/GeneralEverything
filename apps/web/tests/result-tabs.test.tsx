@@ -157,3 +157,29 @@ test("shows Ask AI in grounding mode while summary context is still stabilizing"
   expect(screen.getByLabelText("Ask a question")).toBeEnabled();
   expect(screen.getByRole("button", { name: "Submit question" })).toBeDisabled();
 });
+
+test("shows transcript-ready shell details when audio extraction is complete", () => {
+  render(
+    <AITabs
+      jobStage="transcript_ready"
+      jobStatus="running"
+      transcriptAudioArtifactPath="var/transcripts/public-video/111.wav"
+      transcriptExtractor="ffmpeg"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(
+    screen.getByText("Transcript is preparing its first lines"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Audio extraction finished and the transcript worker shell is ready for speech recognition.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Audio artifact ready: var/transcripts/public-video/111.wav"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Extractor: ffmpeg")).toBeInTheDocument();
+});
