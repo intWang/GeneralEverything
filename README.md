@@ -22,3 +22,28 @@ These become usable after the app skeleton lands in the next task.
 
 4. `pnpm dev:web`
 5. `pnpm dev:api`
+
+## Verification
+
+### API
+
+```bash
+cd apps/api
+source .venv/bin/activate
+pytest
+```
+
+### Web
+
+```bash
+pnpm lint:web
+pnpm test:web
+```
+
+## CI
+
+GitHub Actions runs these checks automatically in `.github/workflows/ci.yml`:
+
+- API tests on Python 3.12
+- Web lint on Node 20 + pnpm 10
+- Web Vitest test suite on Node 20 + pnpm 10
