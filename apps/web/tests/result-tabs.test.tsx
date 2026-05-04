@@ -119,11 +119,13 @@ test("shows complete-style shells for a completed job", () => {
   expect(
     screen.getByText("Grounding source: finalized transcript and summary shells."),
   ).toBeInTheDocument();
-  expect(
-    screen.getByText(
-      'Grounded answer shell for "What should I review first?" based on the transcript, summary, and mind map shells currently available.',
-    ),
-  ).toBeInTheDocument();
+  return waitFor(() => {
+    expect(
+      screen.getByText(
+        'Grounded answer shell for "What should I review first?" based on the transcript, summary, and mind map shells currently available.',
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 test("keeps summary queued during transcript-stage running jobs", () => {
@@ -194,6 +196,7 @@ test("shows Ask AI in grounding mode while summary context is still stabilizing"
 test("unlocks Ask AI once transcript threshold and stable shells are available", () => {
   render(
     <AITabs
+      activeJobId="job-123"
       jobStage="mindmap_generated"
       jobStatus="running"
       mindmapStatus="ready"
@@ -471,6 +474,57 @@ test("ignores stale Ask AI responses after the shell state changes", async () =>
       'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
     ),
   ).not.toBeInTheDocument();
+});
+
+test("prevents overlapping Ask AI submissions while a question is in flight", async () => {
+  let resolveQuestion: ((value: api.SubmitJobQuestionResponse) => void) | null = null;
+  vi.mocked(api.submitJobQuestion).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveQuestion = resolve;
+      }),
+  );
+
+  render(
+    <AITabs
+      activeJobId="job-123"
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapStatus="ready"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "What should I review next?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "Submitting..." })).toBeDisabled();
+  });
+
+  expect(api.submitJobQuestion).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText("Ask a question")).toBeDisabled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Submitting..." }));
+
+  expect(api.submitJobQuestion).toHaveBeenCalledTimes(1);
+
+  resolveQuestion?.({
+    answer:
+      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+    grounded: true,
+    job_id: "job-123",
+    question: "What should I review next?",
+    references: buildAskAiMockReferences("222.wav"),
+  });
+
+  await waitFor(() => {
+    expect(screen.getByRole("button", { name: "Submit question" })).toBeEnabled();
+  });
 });
 
 test("shows transcript-ready shell details when audio extraction is complete", () => {

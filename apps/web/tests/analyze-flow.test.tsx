@@ -9,6 +9,10 @@ vi.mock("../lib/api", () => ({
   submitJobQuestion: vi.fn(),
 }));
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 test("submits the source url and reports job creation", async () => {
   const createJob = vi.mocked(api.createJob);
   const onJobCreated = vi.fn();

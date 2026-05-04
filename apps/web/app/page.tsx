@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import styles from "./homepage.module.css";
 import { AITabs } from "../components/ai-tabs";
@@ -37,100 +37,6 @@ const STAGE_ORDER = [
   "mindmap_generated",
 ] as const;
 const STAGE_RANK = new Map(STAGE_ORDER.map((stage, index) => [stage, index]));
-
-type InitialJobHistorySnapshot = {
-  hasResolvedSnapshot: boolean;
-  jobs: JobRecord[];
-  request: Promise<JobRecord[]> | null;
-};
-
-function readResolvedPromiseValue<T>(value: unknown): T | undefined {
-  if (typeof navigator === "undefined" || !navigator.userAgent.includes("jsdom")) {
-    return undefined;
-  }
-
-  const processValue = (
-    globalThis as {
-      process?: {
-        getBuiltinModule?: (moduleName: string) => {
-          inspect: (
-            target: unknown,
-            options?: { breakLength?: number; depth?: number },
-          ) => string;
-        };
-        versions?: {
-          node?: string;
-        };
-      };
-    }
-  ).process;
-
-  if (!processValue?.versions?.node) {
-    return undefined;
-  }
-
-  try {
-    const utilModule = processValue.getBuiltinModule?.("node:util");
-
-    if (!utilModule) {
-      return undefined;
-    }
-
-    const { inspect } = utilModule;
-    const inspected = inspect(value, { breakLength: Infinity, depth: Infinity });
-    const match = inspected.match(/^Promise\s*\{\s*(.+)\s*\}$/s);
-
-    if (!match) {
-      return undefined;
-    }
-
-    const resolvedValue = match[1].trim();
-
-    if (!resolvedValue || resolvedValue.startsWith("<")) {
-      return undefined;
-    }
-
-    return Function(`"use strict"; return (${resolvedValue});`)() as T;
-  } catch {
-    return undefined;
-  }
-}
-
-function readMockResolvedValue<T>(mockFn: unknown): T | undefined {
-  if (typeof mockFn !== "function") {
-    return undefined;
-  }
-
-  const results = (
-    mockFn as {
-      mock?: {
-        results?: Array<{ type?: string; value?: unknown }>;
-      };
-    }
-  ).mock?.results;
-  const lastResult = results?.[results.length - 1];
-
-  if (lastResult?.type !== "return") {
-    return undefined;
-  }
-
-  return readResolvedPromiseValue<T>(lastResult.value);
-}
-
-function seedInitialJobHistory(): InitialJobHistorySnapshot {
-  if (typeof window === "undefined") {
-    return { hasResolvedSnapshot: false, jobs: [], request: null };
-  }
-
-  const request = Promise.resolve(listJobs());
-  const jobs = readMockResolvedValue<JobRecord[]>(listJobs);
-
-  return {
-    hasResolvedSnapshot: jobs !== undefined,
-    jobs: jobs ?? [],
-    request,
-  };
-}
 
 function getTimelineState(jobState: JobRecord) {
   if (jobState.status === "failed") {
@@ -272,31 +178,17 @@ function mergeJobSnapshot(currentJob: JobRecord | null, nextJob: JobRecord) {
 }
 
 export default function HomePage() {
-  const initialJobHistoryRef = useRef<InitialJobHistorySnapshot | null>(null);
-
-  if (initialJobHistoryRef.current === null) {
-    initialJobHistoryRef.current = seedInitialJobHistory();
-  }
-
   const [inputMode, setInputMode] = useState<InputMode>("public_video");
   const [jobState, setJobState] = useState<JobRecord | null>(null);
-  const [jobHistory, setJobHistory] = useState<JobRecord[]>(
-    () => initialJobHistoryRef.current?.jobs ?? [],
-  );
+  const [jobHistory, setJobHistory] = useState<JobRecord[]>([]);
   const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
   const [isHydrating, setIsHydrating] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const historyRequestRef = useRef<Promise<JobRecord[]> | null>(
-    initialJobHistoryRef.current?.request ?? null,
-  );
 
   async function refreshHistory() {
     try {
-      const jobs = await (historyRequestRef.current ?? listJobs());
-      historyRequestRef.current = null;
-      setJobHistory(jobs);
+      setJobHistory(await listJobs());
     } catch {
-      historyRequestRef.current = null;
       setJobHistory([]);
     }
   }
@@ -355,11 +247,7 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    if (initialJobHistoryRef.current?.hasResolvedSnapshot) {
-      historyRequestRef.current = null;
-    } else {
-      void refreshHistory();
-    }
+    void refreshHistory();
 
     const jobId = readJobIdFromUrl();
 
@@ -483,59 +371,21 @@ export default function HomePage() {
   return (
     <main className={styles.page} id="top">
       <header
-        style={{
-          backdropFilter: isHeaderScrolled ? "blur(12px)" : "blur(6px)",
-          background: isHeaderScrolled
-            ? "rgba(255, 255, 255, 0.94)"
-            : "rgba(255, 255, 255, 0.18)",
-          borderBottom: isHeaderScrolled ? "1px solid #e2e8f0" : "1px solid transparent",
-          boxShadow: isHeaderScrolled ? "0 10px 30px rgba(15, 23, 42, 0.08)" : "none",
-          position: "sticky",
-          top: 0,
-          transition:
-            "background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease",
-          zIndex: 10,
-        }}
+        className={styles.siteHeader}
+        data-scrolled={isHeaderScrolled}
       >
-        <div
-          className={styles.content}
-          style={{
-            alignItems: "center",
-            display: "flex",
-            gap: "1rem",
-            justifyContent: "space-between",
-            paddingBottom: "1rem",
-            paddingTop: "1rem",
-          }}
-        >
-          <a
-            href="#top"
-            style={{
-              color: "#0f172a",
-              fontSize: "1.125rem",
-              fontWeight: 700,
-              textDecoration: "none",
-            }}
-          >
+        <div className={`${styles.content} ${styles.siteHeaderInner}`}>
+          <a className={styles.brandLink} href="#top">
             Video Analysis
           </a>
-          <div
-            style={{
-              alignItems: "center",
-              display: "flex",
-              flexWrap: "wrap",
-              gap: "1rem",
-              justifyContent: "flex-end",
-            }}
-          >
+          <div className={styles.siteNav}>
             <a href="#capabilities">Capabilities</a>
             <a href="#workflow">Workflow</a>
             <a href="#use-cases">Use Cases</a>
             <a href="#preview">Preview</a>
             <a
-              className={styles.primaryButton}
+              className={`${styles.primaryButton} ${styles.buttonLink}`}
               href="#analysis-entry"
-              style={{ display: "inline-flex", textDecoration: "none" }}
             >
               Start analysis
             </a>
@@ -544,15 +394,15 @@ export default function HomePage() {
       </header>
       <Hero />
       <HomepageSections />
-      <section className={styles.content} id="analysis-entry">
-        <div style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
-          <p className={styles.eyebrow} style={{ marginBottom: 0 }}>
+      <section className={`${styles.content} ${styles.analysisEntry}`} id="analysis-entry">
+        <div className={styles.analysisEntryIntro}>
+          <p className={`${styles.eyebrow} ${styles.compactEyebrow}`}>
             Workspace entry
           </p>
-          <h2 className={styles.heroTitle} style={{ fontSize: "2.5rem" }}>
+          <h2 className={styles.analysisEntryTitle}>
             Start with a recording. Leave with searchable answers.
           </h2>
-          <p className={styles.heroDescription} style={{ margin: 0 }}>
+          <p className={styles.analysisEntryDescription}>
             Add a recording source to open one workspace for transcript review,
             summary takeaways, and grounded follow-up questions. The live
             analysis area below keeps status, recording context, and AI outputs
@@ -561,47 +411,27 @@ export default function HomePage() {
         </div>
         <InputSwitcher onChange={setInputMode} value={inputMode} />
         <div className={styles.workflowLayout}>
-          <div style={{ display: "grid", gap: "1rem" }}>
+          <div className={styles.workflowSidebar}>
             <AnalyzeForm inputMode={inputMode} onJobCreated={handleJobCreated} />
             <section aria-label="Recent jobs" className={styles.panel}>
               <h2 className={styles.panelTitle}>Recent jobs</h2>
               {jobHistory.length > 0 ? (
-                <ul
-                  style={{
-                    display: "grid",
-                    gap: "0.75rem",
-                    listStyle: "none",
-                    margin: "1rem 0 0",
-                    padding: 0,
-                  }}
-                >
+                <ul className={styles.historyList}>
                   {jobHistory.map((job) => (
                     <li key={job.id}>
                       <button
                         aria-pressed={jobState?.id === job.id}
+                        className={styles.historyButton}
                         onClick={() => handleHistorySelection(job.id)}
-                        style={{
-                          background: "#f8fafc",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "0.75rem",
-                          color: "#0f172a",
-                          cursor: "pointer",
-                          display: "grid",
-                          font: "inherit",
-                          gap: "0.35rem",
-                          padding: "0.85rem 1rem",
-                          textAlign: "left",
-                          width: "100%",
-                        }}
                         type="button"
                       >
                         <span>{job.source_url}</span>
                         {job.title ? (
-                          <span style={{ color: "#475569", fontSize: "0.875rem" }}>
+                          <span className={styles.historyMeta}>
                             Title: {job.title}
                           </span>
                         ) : null}
-                        <span style={{ color: "#475569", fontSize: "0.875rem" }}>
+                        <span className={styles.historyMeta}>
                           {job.status} • {job.stage}
                         </span>
                       </button>

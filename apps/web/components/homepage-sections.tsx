@@ -103,22 +103,9 @@ export function HomepageSections() {
   return (
     <>
       <section aria-label="Product value" className={styles.content}>
-        <ul
-          style={{
-            display: "grid",
-            gap: "0.75rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-          }}
-        >
+        <ul className={styles.valueBand}>
           {valuePoints.map((point) => (
-            <li
-              className={styles.panel}
-              key={point}
-              style={{ color: "#0f172a", fontWeight: 600 }}
-            >
+            <li className={`${styles.panel} ${styles.valueItem}`} key={point}>
               {point}
             </li>
           ))}
@@ -127,17 +114,10 @@ export function HomepageSections() {
 
       <section className={styles.content} id="capabilities">
         <p className={styles.eyebrow}>Capabilities</p>
-        <h2 className={styles.panelTitle} style={{ fontSize: "2rem" }}>
+        <h2 className={styles.sectionHeading}>
           Everything teams need after the recording ends.
         </h2>
-        <div
-          style={{
-            display: "grid",
-            gap: "1rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(15rem, 1fr))",
-            marginTop: "1.5rem",
-          }}
-        >
+        <div className={styles.capabilityGrid}>
           {capabilities.map((capability) => (
             <article className={styles.panel} key={capability.title}>
               <h3 className={styles.panelTitle}>{capability.title}</h3>
@@ -151,38 +131,16 @@ export function HomepageSections() {
 
       <section className={styles.content} id="workflow">
         <p className={styles.eyebrow}>Workflow</p>
-        <h2 className={styles.panelTitle} style={{ fontSize: "2rem" }}>
+        <h2 className={styles.sectionHeading}>
           Move from recording to follow-up in four steps.
         </h2>
-        <ol
-          style={{
-            display: "grid",
-            gap: "1rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(15rem, 1fr))",
-            margin: "1.5rem 0 0",
-            padding: 0,
-          }}
-        >
+        <ol className={styles.workflowGrid}>
           {workflowSteps.map((step, index) => (
-            <li
-              className={styles.panel}
-              key={step.title}
-              style={{ listStyle: "none" }}
-            >
-              <p
-                style={{
-                  color: "#0369a1",
-                  fontSize: "0.875rem",
-                  fontWeight: 600,
-                  margin: 0,
-                }}
-              >
+            <li className={`${styles.panel} ${styles.workflowStepCard}`} key={step.title}>
+              <p className={styles.workflowStepNumber}>
                 Step {index + 1}
               </p>
-              <h3
-                className={styles.panelTitle}
-                style={{ marginTop: "0.75rem" }}
-              >
+              <h3 className={`${styles.panelTitle} ${styles.workflowStepTitle}`}>
                 {step.title}
               </h3>
               <p className={styles.workspaceDescription}>{step.description}</p>
@@ -193,17 +151,10 @@ export function HomepageSections() {
 
       <section className={styles.content} id="use-cases">
         <p className={styles.eyebrow}>Use Cases</p>
-        <h2 className={styles.panelTitle} style={{ fontSize: "2rem" }}>
+        <h2 className={styles.sectionHeading}>
           Built for the recordings teams already rely on.
         </h2>
-        <div
-          style={{
-            display: "grid",
-            gap: "1rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(16rem, 1fr))",
-            marginTop: "1.5rem",
-          }}
-        >
+        <div className={styles.useCaseGrid}>
           {useCases.map((useCase) => (
             <article className={styles.panel} key={useCase.title}>
               <h3 className={styles.panelTitle}>{useCase.title}</h3>
@@ -214,20 +165,13 @@ export function HomepageSections() {
       </section>
 
       <section className={styles.content} id="preview">
-        <div
-          style={{
-            alignItems: "start",
-            display: "grid",
-            gap: "1.5rem",
-            gridTemplateColumns: "repeat(auto-fit, minmax(18rem, 1fr))",
-          }}
-        >
-          <div style={{ display: "grid", gap: "0.75rem" }}>
+        <div className={styles.previewGrid}>
+          <div className={styles.previewIntro}>
             <p className={styles.eyebrow}>Preview</p>
-            <h2 className={styles.panelTitle} style={{ fontSize: "2rem" }}>
+            <h2 className={styles.sectionHeading}>
               Review the workflow before you jump into the live workspace.
             </h2>
-            <p className={styles.heroDescription} style={{ margin: 0 }}>
+            <p className={styles.previewIntroCopy}>
               The real analysis entry stays on this page. This preview simply
               shows how status, recording context, and AI outputs come together
               once a job is in motion.
@@ -235,66 +179,43 @@ export function HomepageSections() {
           </div>
           <section
             aria-label="Workspace preview"
-            className={styles.panel}
-            style={{ display: "grid", gap: "1rem", padding: "1.5rem" }}
+            className={`${styles.panel} ${styles.previewWorkspace}`}
           >
-            <div style={{ display: "grid", gap: "0.5rem" }}>
-              <p className={styles.eyebrow} style={{ margin: 0 }}>
+            <div className={styles.previewWorkspaceHeader}>
+              <p className={`${styles.eyebrow} ${styles.compactEyebrow}`}>
                 Product preview
               </p>
               <h3 className={styles.panelTitle}>
                 Start with a recording. Leave with searchable answers.
               </h3>
-              <p className={styles.workspaceDescription} style={{ margin: 0 }}>
+              <p className={styles.previewWorkspaceCopy}>
                 Track status, inspect recording details, read the transcript,
                 review takeaways, and ask grounded follow-up questions from one
                 place.
               </p>
             </div>
-            <div
-              style={{
-                display: "grid",
-                gap: "0.75rem",
-                gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-              }}
-            >
+            <div className={styles.previewBlocksGrid}>
               {workspacePreviewBlocks.map((block) => (
-                <div
-                  key={block.title}
-                  style={{
-                    background: "#f8fafc",
-                    borderRadius: "0.75rem",
-                    padding: "1rem",
-                  }}
-                >
-                  <p className={styles.sectionLabel} style={{ margin: 0 }}>
+                <div className={styles.previewBlock} key={block.title}>
+                  <p className={`${styles.sectionLabel} ${styles.compactLabel}`}>
                     {block.title}
                   </p>
-                  <p
-                    className={styles.workspaceDescription}
-                    style={{ marginTop: "0.5rem" }}
-                  >
+                  <p className={styles.previewBlockCopy}>
                     {block.description}
                   </p>
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+            <div className={styles.ctaRow}>
               <a
-                className={styles.primaryButton}
+                className={`${styles.primaryButton} ${styles.buttonLink}`}
                 href="#analysis-entry"
-                style={{ display: "inline-flex", textDecoration: "none" }}
               >
                 Start analysis
               </a>
               <a
-                className={styles.secondaryButton}
+                className={`${styles.secondaryButton} ${styles.secondaryButtonInline}`}
                 href="#workflow"
-                style={{
-                  display: "inline-flex",
-                  marginTop: 0,
-                  textDecoration: "none",
-                }}
               >
                 Explore workflow
               </a>

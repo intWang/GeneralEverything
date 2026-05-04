@@ -87,17 +87,21 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
   expect(
     screen.getByText("Ask AI shell is ready for grounded follow-ups"),
   ).toBeInTheDocument();
-  expect(
-    screen.getByText(
-      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
-    ),
-  ).toBeInTheDocument();
-  expect(screen.getByText("References")).toBeInTheDocument();
-  expect(
-    screen.getByText(
-      buildAskAiMockReferences("homepage.wav")[0],
-    ),
-  ).toBeInTheDocument();
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+      ),
+    ).toBeInTheDocument();
+  });
+  await waitFor(() => {
+    expect(screen.getByText("References")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        buildAskAiMockReferences("homepage.wav")[0],
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 test("keeps Ask AI submission blocked while grounding is still stabilizing", async () => {

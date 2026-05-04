@@ -837,11 +837,13 @@ test("surfaces the Ask AI ready shell for a completed revisited job", async () =
   expect(
     screen.getByText("Grounding source: finalized transcript and summary shells."),
   ).toBeInTheDocument();
-  expect(
-    screen.getByText(
-      'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
-    ),
-  ).toBeInTheDocument();
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 test("resets Ask AI draft state when switching between jobs", async () => {
@@ -932,11 +934,13 @@ test("resets Ask AI draft state when switching between jobs", async () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
 
-  expect(
-    screen.getByText(
-      'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
-    ),
-  ).toBeInTheDocument();
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
+      ),
+    ).toBeInTheDocument();
+  });
 
   fireEvent.click(
     screen.getByRole("button", { name: /https:\/\/example.com\/completed-b/i }),
@@ -1042,8 +1046,11 @@ test("updates the URL and responds to browser navigation for job history", async
 
   render(<HomePage />);
 
+  const secondJobButton = await screen.findByRole("button", {
+    name: /https:\/\/example.com\/second/i,
+  });
   fireEvent.click(
-    screen.getByRole("button", { name: /https:\/\/example.com\/second/i }),
+    secondJobButton,
   );
 
   await waitFor(() => {
