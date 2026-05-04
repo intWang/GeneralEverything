@@ -1,12 +1,22 @@
+"use client";
+
+import { useState } from "react";
+
+import styles from "./homepage.module.css";
 import { Hero } from "../components/hero";
 import { InputSwitcher } from "../components/input-switcher";
+import { ResultWorkspace } from "../components/result-workspace";
+import type { InputMode } from "../lib/types";
 
 export default function HomePage() {
+  const [inputMode, setInputMode] = useState<InputMode>("public_video");
+
   return (
-    <main className="min-h-screen bg-white text-slate-950">
+    <main className={styles.page}>
       <Hero />
-      <section className="mx-auto max-w-6xl px-6 pb-16">
-        <InputSwitcher />
+      <section className={styles.content}>
+        <InputSwitcher onChange={setInputMode} value={inputMode} />
+        <ResultWorkspace />
       </section>
     </main>
   );

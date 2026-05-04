@@ -1,10 +1,35 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 import HomePage from "../app/page";
 
-test("renders both input modes", () => {
+test("renders both input modes as accessible radio options", () => {
   render(<HomePage />);
 
-  expect(screen.getByText("Public Video URL")).toBeInTheDocument();
-  expect(screen.getByText("RingCentral Recording URL")).toBeInTheDocument();
+  const publicVideoOption = screen.getByRole("radio", {
+    name: "Public Video URL",
+  });
+  const ringcentralRecordingOption = screen.getByRole("radio", {
+    name: "RingCentral Recording URL",
+  });
+
+  expect(publicVideoOption).toBeInTheDocument();
+  expect(ringcentralRecordingOption).toBeInTheDocument();
+  expect(publicVideoOption).toBeChecked();
+  expect(ringcentralRecordingOption).not.toBeChecked();
+});
+
+test("switches the selected input mode", () => {
+  render(<HomePage />);
+
+  const publicVideoOption = screen.getByRole("radio", {
+    name: "Public Video URL",
+  });
+  const ringcentralRecordingOption = screen.getByRole("radio", {
+    name: "RingCentral Recording URL",
+  });
+
+  fireEvent.click(ringcentralRecordingOption);
+
+  expect(ringcentralRecordingOption).toBeChecked();
+  expect(publicVideoOption).not.toBeChecked();
 });

@@ -1,0 +1,87 @@
+.page {
+  min-height: 100vh;
+  background: #ffffff;
+  color: #0f172a;
+}
+
+.hero {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 5rem 1.5rem 2rem;
+}
+
+.eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.heroCopy {
+  max-width: 48rem;
+}
+
+.heroTitle {
+  margin: 0;
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  line-height: 1.1;
+}
+
+.heroDescription {
+  margin: 1rem 0 0;
+  max-width: 40rem;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #475569;
+}
+
+.content {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 4rem;
+}
+
+.sectionLabel {
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.switcher {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+}
+
+.switcherOption {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.switcherOption + .switcherOption {
+  margin-top: 0.75rem;
+}
+
+.switcherRadio {
+  margin: 0;
+}
+
+.workspace {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.75rem;
+  color: #475569;
+}
+
+.workspaceTitle {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.workspaceDescription {
+  margin: 0.5rem 0 0;
+}

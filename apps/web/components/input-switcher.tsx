@@ -1,33 +1,41 @@
 "use client";
 
+import styles from "../app/homepage.module.css";
 import type { InputMode } from "../lib/types";
 
 const INPUT_OPTIONS: Array<{ label: string; value: InputMode }> = [
   {
     label: "Public Video URL",
-    value: "public-video-url",
+    value: "public_video",
   },
   {
     label: "RingCentral Recording URL",
-    value: "ringcentral-recording-url",
+    value: "ringcentral_recording",
   },
 ];
 
-export function InputSwitcher() {
+type InputSwitcherProps = {
+  value: InputMode;
+  onChange: (value: InputMode) => void;
+};
+
+export function InputSwitcher({ value, onChange }: InputSwitcherProps) {
   return (
-    <div
-      aria-label="Input mode switcher"
-      className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row"
-    >
+    <fieldset className={styles.switcher}>
+      <legend className={styles.sectionLabel}>Choose an input source</legend>
       {INPUT_OPTIONS.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-left text-sm font-medium text-slate-950 shadow-sm transition hover:border-slate-400"
-        >
-          {option.label}
-        </button>
+        <label key={option.value} className={styles.switcherOption}>
+          <input
+            checked={value === option.value}
+            className={styles.switcherRadio}
+            name="input-mode"
+            onChange={() => onChange(option.value)}
+            type="radio"
+            value={option.value}
+          />
+          <span>{option.label}</span>
+        </label>
       ))}
-    </div>
+    </fieldset>
   );
 }

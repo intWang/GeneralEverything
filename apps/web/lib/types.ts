@@ -1,1 +1,1 @@
-export type InputMode = "public-video-url" | "ringcentral-recording-url";
+export type InputMode = "public_video" | "ringcentral_recording";
