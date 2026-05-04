@@ -203,3 +203,84 @@ def test_process_analysis_job_marks_download_failure(tmp_path: Path) -> None:
             "message": "unable to download",
         },
     ) in calls
+
+
+def test_process_analysis_job_persists_transcript_shell_after_download(tmp_path: Path) -> None:
+    calls: list[tuple[str, object]] = []
+    persisted_jobs = []
+    job = _make_job()
+    planned_download = plan_public_video_download_shell(job, download_root=tmp_path)
+
+    def publish(event_name: str, payload: dict) -> None:
+        calls.append((event_name, payload))
+
+    def load_job(requested_job_id: UUID) -> AnalysisJob:
+        assert requested_job_id == job.id
+        return job
+
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_jobs.append(
+            (
+                updated_job.download_status,
+                updated_job.stage,
+                updated_job.transcript_status,
+            )
+        )
+
+    def execute_download(_job: AnalysisJob, planned=None):
+        assert planned is planned_download
+        return SimpleNamespace(
+            status="ready",
+            stage="download_ready",
+            executor="yt-dlp",
+            format_id="best",
+            format_label="Best available",
+            artifact_path=str(tmp_path / "artifact.mp4"),
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "download_ready",
+                "executor": "yt-dlp",
+                "format_id": "best",
+                "format_label": "Best available",
+                "artifact_path": str(tmp_path / "artifact.mp4"),
+            },
+        )
+
+    def prepare_transcript(_job: AnalysisJob):
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_ready",
+            extractor="ffmpeg",
+            audio_artifact_path=str(tmp_path / "artifact.wav"),
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_ready",
+                "extractor": "ffmpeg",
+                "audio_artifact_path": str(tmp_path / "artifact.wav"),
+            },
+        )
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": publish,
+                "load_job": load_job,
+                "persist_job": persist_job,
+                "plan_public_video_download_shell": lambda current_job: planned_download,
+                "execute_public_video_download_shell": execute_download,
+                "prepare_public_video_transcript_shell": prepare_transcript,
+            },
+            job.id,
+        )
+    )
+
+    assert any(name == "video.download" for name, _payload in calls)
+    assert any(name == "transcript.shell" for name, _payload in calls)
+    assert persisted_jobs == [
+        ("ready", "download_ready", None),
+        ("ready", "transcript_ready", "ready"),
+    ]
+    assert job.stage == "transcript_ready"
+    assert job.transcript_status == "ready"
+    assert job.transcript_extractor == "ffmpeg"
+    assert job.transcript_audio_artifact_path == str(tmp_path / "artifact.wav")

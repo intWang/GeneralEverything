@@ -87,6 +87,9 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
     assert body["download_format_id"] is None
     assert body["download_format_label"] is None
     assert body["download_artifact_path"] is None
+    assert body["transcript_status"] is None
+    assert body["transcript_extractor"] is None
+    assert body["transcript_audio_artifact_path"] is None
 
     with testing_session() as session:
         persisted_job = session.query(AnalysisJob).one()
@@ -207,6 +210,9 @@ def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
     assert body["download_format_id"] == "best"
     assert body["download_format_label"] == "best-available"
     assert body["download_artifact_path"] == "artifacts/downloads/demo/sample-video.mp4"
+    assert body["transcript_status"] is None
+    assert body["transcript_extractor"] is None
+    assert body["transcript_audio_artifact_path"] is None
     assert body["created_at"]
 
 

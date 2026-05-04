@@ -26,6 +26,9 @@ class JobResponse(BaseModel):
     download_format_id: str | None
     download_format_label: str | None
     download_artifact_path: str | None
+    transcript_status: str | None
+    transcript_extractor: str | None
+    transcript_audio_artifact_path: str | None
     status: JobStatus
     stage: str
     created_at: datetime
