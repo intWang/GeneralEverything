@@ -468,6 +468,42 @@ def test_process_analysis_job_publishes_normalized_probe_error() -> None:
     assert job.stage == "unsupported_url"
 
 
+def test_process_analysis_job_skips_completed_public_video_jobs() -> None:
+    calls = []
+    persisted_jobs = []
+    job = AnalysisJob(
+        id=UUID("99999999-9999-9999-9999-999999999999"),
+        input_mode=InputMode.PUBLIC_VIDEO,
+        source_url="https://example.com/video",
+        status=JobStatus.COMPLETED,
+        stage="mindmap_generated",
+    )
+
+    def publish(event_name: str, payload: dict) -> None:
+        calls.append((event_name, payload))
+
+    def load_job(requested_job_id: UUID) -> AnalysisJob:
+        assert requested_job_id == job.id
+        return job
+
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_jobs.append(updated_job)
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": publish,
+                "load_job": load_job,
+                "persist_job": persist_job,
+            },
+            UUID("99999999-9999-9999-9999-999999999999"),
+        )
+    )
+
+    assert calls == []
+    assert persisted_jobs == []
+
+
 def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
     calls = []
     persisted_jobs = []

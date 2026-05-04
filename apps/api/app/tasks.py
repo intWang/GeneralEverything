@@ -390,7 +390,7 @@ async def process_analysis_job(ctx: dict, job_id: UUID) -> None:
         await _publish_event(publisher, "video.metadata", {"job_id": str(job_id)})
         return None
 
-    if job.status == JobStatus.FAILED or job.stage == "download_ready":
+    if job.status in {JobStatus.FAILED, JobStatus.COMPLETED} or job.stage == "download_ready":
         return None
 
     persist_job = ctx.get("persist_job") or _persist_loaded_job
