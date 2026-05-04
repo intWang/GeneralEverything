@@ -177,6 +177,18 @@ function mergeJobSnapshot(currentJob: JobRecord | null, nextJob: JobRecord) {
   return nextJob;
 }
 
+function mergeJobStatusUpdate(
+  currentJob: JobRecord,
+  status: JobRecord["status"],
+  stage?: JobRecord["stage"],
+) {
+  return mergeJobSnapshot(currentJob, {
+    ...currentJob,
+    stage: stage ?? currentJob.stage,
+    status,
+  });
+}
+
 export default function HomePage() {
   const [inputMode, setInputMode] = useState<InputMode>("public_video");
   const [jobState, setJobState] = useState<JobRecord | null>(null);
@@ -367,14 +379,13 @@ export default function HomePage() {
 
         setJobState((currentState) =>
           currentState?.id === activeJobId
-            ? {
-                ...currentState,
-                stage:
-                  "stage" in payload && typeof payload.stage === "string"
-                    ? (payload.stage as JobRecord["stage"])
-                    : currentState.stage,
-                status: payload.status as JobRecord["status"],
-              }
+            ? mergeJobStatusUpdate(
+                currentState,
+                payload.status as JobRecord["status"],
+                "stage" in payload && typeof payload.stage === "string"
+                  ? (payload.stage as JobRecord["stage"])
+                  : undefined,
+              )
             : currentState,
         );
 

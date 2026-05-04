@@ -335,6 +335,87 @@ test("refreshes the active job snapshot when a status event arrives", async () =
   expect(getJob).toHaveBeenCalledTimes(2);
 });
 
+test("ignores out-of-order status events for the same active job when refresh fails", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=91919191-9191-9191-9191-919191919191",
+  );
+  getJob
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T16:20:00Z",
+      id: "91919191-9191-9191-9191-919191919191",
+      input_mode: "public_video",
+      source_url: "https://example.com/monotonic",
+      stage: "summary_generated",
+      status: "running",
+      summary_key_points_count: 2,
+      summary_preview_text: "Summary shell generated from transcript preview.",
+      summary_status: "ready",
+      title: "Newest active snapshot",
+    })
+    .mockRejectedValueOnce(new Error("stale refresh failed"));
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:20:00Z",
+      id: "91919191-9191-9191-9191-919191919191",
+      input_mode: "public_video",
+      source_url: "https://example.com/monotonic",
+      stage: "summary_generated",
+      status: "running",
+      summary_key_points_count: 2,
+      summary_preview_text: "Summary shell generated from transcript preview.",
+      summary_status: "ready",
+      title: "Newest active snapshot",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByText("Newest active snapshot")).toBeInTheDocument();
+  });
+
+  handlers?.onEvent?.({
+    event: "job.status",
+    data: {
+      job_id: "91919191-9191-9191-9191-919191919191",
+      stage: "queued",
+      status: "queued",
+    },
+  });
+
+  await waitFor(() => {
+    expect(getJob).toHaveBeenCalledTimes(2);
+  });
+
+  expect(screen.getByText("Newest active snapshot")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Job 91919191-9191-9191-9191-919191919191 generated a summary shell preview.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Key point shells ready: 2")).toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      "Job 91919191-9191-9191-9191-919191919191 is queued for analysis.",
+    ),
+  ).not.toBeInTheDocument();
+});
+
 test("refreshes the active job snapshot when a qa.ready event arrives", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
