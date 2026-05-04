@@ -1,7 +1,6 @@
-export type CreateJobResponse = {
-  id: string;
-  [key: string]: unknown;
-};
+import type { JobRecord } from "./types";
+
+export type CreateJobResponse = JobRecord;
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000/api";
 
@@ -18,20 +17,32 @@ export function buildApiUrl(path: string) {
   return `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+async function readJson<T>(input: string, init?: RequestInit) {
+  const response = await fetch(input, init);
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+
 export async function createJob(sourceUrl: string) {
   const payload = {
     source_url: sourceUrl,
   };
 
-  const response = await fetch(buildApiUrl("/jobs"), {
+  return readJson<CreateJobResponse>(buildApiUrl("/jobs"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
 
-  if (!response.ok) {
-    throw new Error("Failed to create job");
-  }
+export function getJob(jobId: string) {
+  return readJson<JobRecord>(buildApiUrl(`/jobs/${jobId}`));
+}
 
-  return (await response.json()) as CreateJobResponse;
+export function listJobs(limit = 8) {
+  return readJson<JobRecord[]>(buildApiUrl(`/jobs?limit=${limit}`));
 }

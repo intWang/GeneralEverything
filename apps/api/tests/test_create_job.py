@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from alembic import command
@@ -23,11 +24,16 @@ def migrate_database(database_path: Path) -> None:
     command.upgrade(config, "head")
 
 
-def test_create_job_returns_pending_job(tmp_path) -> None:
+def make_test_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
     database_path = tmp_path / "jobs.db"
     migrate_database(database_path)
     engine = create_engine(f"sqlite:///{database_path}", future=True)
-    testing_session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
+    testing_session = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        future=True,
+    )
 
     def override_get_session() -> Generator[Session, None, None]:
         session = testing_session()
@@ -37,7 +43,11 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
             session.close()
 
     app.dependency_overrides[get_session] = override_get_session
-    client = TestClient(app)
+    return TestClient(app), testing_session
+
+
+def test_create_job_returns_pending_job(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
 
     response = client.post(
         "/api/jobs",
@@ -63,20 +73,7 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
 
 
 def test_create_job_detects_ringcentral_recording_url(tmp_path) -> None:
-    database_path = tmp_path / "jobs.db"
-    migrate_database(database_path)
-    engine = create_engine(f"sqlite:///{database_path}", future=True)
-    testing_session = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-
-    def override_get_session() -> Generator[Session, None, None]:
-        session = testing_session()
-        try:
-            yield session
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_session] = override_get_session
-    client = TestClient(app)
+    client, testing_session = make_test_client(tmp_path)
 
     source_url = (
         "https://xmrupxmn-rxe-1-v.int.rclabenv.com/recordings/abc?isMeetingId=true"
@@ -100,3 +97,65 @@ def test_create_job_detects_ringcentral_recording_url(tmp_path) -> None:
 
     assert str(persisted_job.id) == body["id"]
     assert persisted_job.input_mode.value == "ringcentral_recording"
+
+
+def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
+    client, _testing_session = make_test_client(tmp_path)
+
+    created = client.post(
+        "/api/jobs",
+        json={"source_url": "https://example.com/video"},
+    )
+    job_id = created.json()["id"]
+
+    response = client.get(f"/api/jobs/{job_id}")
+
+    app.dependency_overrides.clear()
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["id"] == job_id
+    assert body["input_mode"] == "public_video"
+    assert body["status"] == "queued"
+    assert body["stage"] == "queued"
+    assert body["created_at"]
+
+
+def test_get_job_returns_404_when_missing(tmp_path) -> None:
+    client, _testing_session = make_test_client(tmp_path)
+
+    response = client.get("/api/jobs/11111111-1111-1111-1111-111111111111")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Job not found"}
+
+
+def test_list_jobs_returns_recent_jobs_first(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    first = client.post(
+        "/api/jobs",
+        json={"source_url": "https://example.com/first"},
+    ).json()
+    second = client.post(
+        "/api/jobs",
+        json={"source_url": "https://example.com/second"},
+    ).json()
+
+    with testing_session() as session:
+        jobs = session.query(AnalysisJob).order_by(AnalysisJob.source_url).all()
+        jobs[0].created_at = datetime(2026, 5, 4, 9, 0, tzinfo=UTC)
+        jobs[1].created_at = datetime(2026, 5, 4, 9, 1, tzinfo=UTC) + timedelta(seconds=1)
+        session.commit()
+
+    response = client.get("/api/jobs")
+
+    app.dependency_overrides.clear()
+
+    body = response.json()
+    assert response.status_code == 200
+    assert [item["id"] for item in body] == [second["id"], first["id"]]
+    assert body[0]["source_url"] == "https://example.com/second"
+    assert body[1]["source_url"] == "https://example.com/first"

@@ -1,3 +1,4 @@
+from datetime import datetime
 import uuid
 
 from pydantic import BaseModel, ConfigDict, HttpUrl
@@ -17,3 +18,4 @@ class JobResponse(BaseModel):
     source_url: HttpUrl
     status: JobStatus
     stage: str
+    created_at: datetime

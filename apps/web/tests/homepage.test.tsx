@@ -3,10 +3,24 @@ import { vi } from "vitest";
 
 import HomePage from "../app/page";
 import * as api from "../lib/api";
+import * as sse from "../lib/sse";
 
 vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
+  getJob: vi.fn(),
+  listJobs: vi.fn(),
 }));
+
+vi.mock("../lib/sse", () => ({
+  subscribeToJobEvents: vi.fn(),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.history.replaceState({}, "", "/");
+  vi.mocked(sse.subscribeToJobEvents).mockReturnValue(() => undefined);
+  vi.mocked(api.listJobs).mockResolvedValue([]);
+});
 
 test("renders both input modes as accessible radio options", () => {
   render(<HomePage />);
@@ -42,8 +56,37 @@ test("switches the selected input mode", () => {
 
 test("reveals the workflow panels after creating a job", async () => {
   const createJob = vi.mocked(api.createJob);
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
 
-  createJob.mockResolvedValue({ id: "job-123" });
+  createJob.mockResolvedValue({
+    created_at: "2026-05-04T09:00:00Z",
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "public_video",
+    source_url: "https://example.com/video",
+    stage: "queued",
+    status: "queued",
+  });
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T09:00:00Z",
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "public_video",
+    source_url: "https://example.com/video",
+    stage: "queued",
+    status: "queued",
+  });
+  listJobs
+    .mockResolvedValueOnce([])
+    .mockResolvedValue([
+      {
+        created_at: "2026-05-04T09:00:00Z",
+        id: "11111111-1111-1111-1111-111111111111",
+        input_mode: "public_video",
+        source_url: "https://example.com/video",
+        stage: "queued",
+        status: "queued",
+      },
+    ]);
 
   render(<HomePage />);
 
@@ -60,13 +103,18 @@ test("reveals the workflow panels after creating a job", async () => {
     expect(screen.getByRole("heading", { name: "AI output" })).toBeInTheDocument();
   });
 
+  expect(getJob).toHaveBeenCalledWith("11111111-1111-1111-1111-111111111111");
   expect(screen.getByText("Summary")).toBeInTheDocument();
   expect(screen.getByText("Transcript")).toBeInTheDocument();
   expect(screen.getByText("Mind Map")).toBeInTheDocument();
   expect(screen.getByText("Ask AI")).toBeInTheDocument();
   expect(
-    screen.getByText("Job job-123 is queued for analysis."),
+    screen.getByText(
+      "Job 11111111-1111-1111-1111-111111111111 is queued for analysis.",
+    ),
   ).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Recent jobs" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /https:\/\/example.com\/video/i })).toBeInTheDocument();
 });
 
 test("shows a RingCentral stub prompt when that mode is selected", () => {
@@ -82,4 +130,217 @@ test("shows a RingCentral stub prompt when that mode is selected", () => {
   expect(
     screen.getByRole("button", { name: "Connect RingCentral (coming soon)" }),
   ).toBeInTheDocument();
+});
+
+test("maps backend completed status to a complete timeline state", async () => {
+  const createJob = vi.mocked(api.createJob);
+  const getJob = vi.mocked(api.getJob);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+
+  createJob.mockResolvedValue({
+    created_at: "2026-05-04T09:00:00Z",
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "public_video",
+    source_url: "https://example.com/video",
+    stage: "queued",
+    status: "queued",
+  });
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T09:00:00Z",
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "public_video",
+    source_url: "https://example.com/video",
+    stage: "queued",
+    status: "queued",
+  });
+  subscribeToJobEvents.mockImplementation((_jobId, handlers = {}) => {
+    handlers.onEvent?.({
+      event: "job.status",
+      data: { status: "completed" },
+    });
+
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  fireEvent.change(screen.getByLabelText("Video source"), {
+    target: { value: "https://example.com/video" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 11111111-1111-1111-1111-111111111111 is completed for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(
+    screen
+      .getByText(
+        "Job 11111111-1111-1111-1111-111111111111 is completed for analysis.",
+      )
+      .closest("li"),
+  ).toHaveAttribute("data-state", "complete");
+});
+
+test("hydrates a revisited job from the URL query", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=22222222-2222-2222-2222-222222222222",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T10:00:00Z",
+    id: "22222222-2222-2222-2222-222222222222",
+    input_mode: "public_video",
+    source_url: "https://example.com/revisit",
+    stage: "queued",
+    status: "running",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T10:00:00Z",
+      id: "22222222-2222-2222-2222-222222222222",
+      input_mode: "public_video",
+      source_url: "https://example.com/revisit",
+      stage: "queued",
+      status: "running",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 22222222-2222-2222-2222-222222222222 is running for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(getJob).toHaveBeenCalledWith("22222222-2222-2222-2222-222222222222");
+  expect(
+    screen.getByRole("button", { name: /https:\/\/example.com\/revisit/i }),
+  ).toBeInTheDocument();
+});
+
+test("keeps the created job visible when follow-up hydration fails", async () => {
+  const createJob = vi.mocked(api.createJob);
+  const getJob = vi.mocked(api.getJob);
+
+  createJob.mockResolvedValue({
+    created_at: "2026-05-04T11:00:00Z",
+    id: "33333333-3333-3333-3333-333333333333",
+    input_mode: "public_video",
+    source_url: "https://example.com/fallback",
+    stage: "queued",
+    status: "queued",
+  });
+  getJob.mockRejectedValue(new Error("boom"));
+
+  render(<HomePage />);
+
+  fireEvent.change(screen.getByLabelText("Video source"), {
+    target: { value: "https://example.com/fallback" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 33333333-3333-3333-3333-333333333333 is queued for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByText("Unable to refresh the saved analysis shell."),
+  ).toBeInTheDocument();
+  expect(window.location.search).toBe(
+    "?job=33333333-3333-3333-3333-333333333333",
+  );
+});
+
+test("updates the URL and responds to browser navigation for job history", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T09:00:00Z",
+      id: "11111111-1111-1111-1111-111111111111",
+      input_mode: "public_video",
+      source_url: "https://example.com/first",
+      stage: "queued",
+      status: "queued",
+    },
+    {
+      created_at: "2026-05-04T10:00:00Z",
+      id: "22222222-2222-2222-2222-222222222222",
+      input_mode: "public_video",
+      source_url: "https://example.com/second",
+      stage: "queued",
+      status: "running",
+    },
+  ]);
+  getJob.mockImplementation(async (jobId) => {
+    if (jobId === "11111111-1111-1111-1111-111111111111") {
+      return {
+        created_at: "2026-05-04T09:00:00Z",
+        id: jobId,
+        input_mode: "public_video",
+        source_url: "https://example.com/first",
+        stage: "queued",
+        status: "queued",
+      };
+    }
+
+    return {
+      created_at: "2026-05-04T10:00:00Z",
+      id: jobId,
+      input_mode: "public_video",
+      source_url: "https://example.com/second",
+      stage: "queued",
+      status: "running",
+    };
+  });
+
+  render(<HomePage />);
+
+  fireEvent.click(
+    screen.getByRole("button", { name: /https:\/\/example.com\/second/i }),
+  );
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 22222222-2222-2222-2222-222222222222 is running for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(window.location.search).toBe(
+    "?job=22222222-2222-2222-2222-222222222222",
+  );
+
+  window.history.pushState(
+    {},
+    "",
+    "/?job=11111111-1111-1111-1111-111111111111",
+  );
+  window.dispatchEvent(new PopStateEvent("popstate"));
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 11111111-1111-1111-1111-111111111111 is queued for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
 });
