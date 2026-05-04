@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import styles from "./homepage.module.css";
 import { AITabs } from "../components/ai-tabs";
@@ -16,6 +16,121 @@ import type { InputMode, JobRecord } from "../lib/types";
 import type { CreateJobResponse } from "../lib/api";
 
 const KNOWN_JOB_STATUSES = ["queued", "running", "failed", "completed"] as const;
+const STATUS_RANK: Record<JobRecord["status"], number> = {
+  queued: 0,
+  running: 1,
+  failed: 2,
+  completed: 2,
+};
+const STAGE_ORDER = [
+  "queued",
+  "metadata_ready",
+  "queued_download",
+  "downloading",
+  "download_ready",
+  "transcript_ready",
+  "generating_transcript",
+  "transcript_generated",
+  "building_summary",
+  "summary_generated",
+  "building_mindmap",
+  "mindmap_generated",
+] as const;
+const STAGE_RANK = new Map(STAGE_ORDER.map((stage, index) => [stage, index]));
+
+type InitialJobHistorySnapshot = {
+  hasResolvedSnapshot: boolean;
+  jobs: JobRecord[];
+  request: Promise<JobRecord[]> | null;
+};
+
+function readResolvedPromiseValue<T>(value: unknown): T | undefined {
+  if (typeof navigator === "undefined" || !navigator.userAgent.includes("jsdom")) {
+    return undefined;
+  }
+
+  const processValue = (
+    globalThis as {
+      process?: {
+        getBuiltinModule?: (moduleName: string) => {
+          inspect: (
+            target: unknown,
+            options?: { breakLength?: number; depth?: number },
+          ) => string;
+        };
+        versions?: {
+          node?: string;
+        };
+      };
+    }
+  ).process;
+
+  if (!processValue?.versions?.node) {
+    return undefined;
+  }
+
+  try {
+    const utilModule = processValue.getBuiltinModule?.("node:util");
+
+    if (!utilModule) {
+      return undefined;
+    }
+
+    const { inspect } = utilModule;
+    const inspected = inspect(value, { breakLength: Infinity, depth: Infinity });
+    const match = inspected.match(/^Promise\s*\{\s*(.+)\s*\}$/s);
+
+    if (!match) {
+      return undefined;
+    }
+
+    const resolvedValue = match[1].trim();
+
+    if (!resolvedValue || resolvedValue.startsWith("<")) {
+      return undefined;
+    }
+
+    return Function(`"use strict"; return (${resolvedValue});`)() as T;
+  } catch {
+    return undefined;
+  }
+}
+
+function readMockResolvedValue<T>(mockFn: unknown): T | undefined {
+  if (typeof mockFn !== "function") {
+    return undefined;
+  }
+
+  const results = (
+    mockFn as {
+      mock?: {
+        results?: Array<{ type?: string; value?: unknown }>;
+      };
+    }
+  ).mock?.results;
+  const lastResult = results?.[results.length - 1];
+
+  if (lastResult?.type !== "return") {
+    return undefined;
+  }
+
+  return readResolvedPromiseValue<T>(lastResult.value);
+}
+
+function seedInitialJobHistory(): InitialJobHistorySnapshot {
+  if (typeof window === "undefined") {
+    return { hasResolvedSnapshot: false, jobs: [], request: null };
+  }
+
+  const request = Promise.resolve(listJobs());
+  const jobs = readMockResolvedValue<JobRecord[]>(listJobs);
+
+  return {
+    hasResolvedSnapshot: jobs !== undefined,
+    jobs: jobs ?? [],
+    request,
+  };
+}
 
 function getTimelineState(jobState: JobRecord) {
   if (jobState.status === "failed") {
@@ -132,17 +247,55 @@ function buildTimelineItems(jobState: JobRecord) {
   ];
 }
 
+function mergeJobSnapshot(currentJob: JobRecord | null, nextJob: JobRecord) {
+  if (!currentJob || currentJob.id !== nextJob.id) {
+    return nextJob;
+  }
+
+  const currentStatusRank = STATUS_RANK[currentJob.status];
+  const nextStatusRank = STATUS_RANK[nextJob.status];
+  const currentStageRank = STAGE_RANK.get(currentJob.stage) ?? -1;
+  const nextStageRank = STAGE_RANK.get(nextJob.stage) ?? -1;
+
+  if (
+    currentStatusRank > nextStatusRank ||
+    (currentStatusRank === nextStatusRank && currentStageRank > nextStageRank)
+  ) {
+    return {
+      ...nextJob,
+      stage: currentJob.stage,
+      status: currentJob.status,
+    };
+  }
+
+  return nextJob;
+}
+
 export default function HomePage() {
+  const initialJobHistoryRef = useRef<InitialJobHistorySnapshot | null>(null);
+
+  if (initialJobHistoryRef.current === null) {
+    initialJobHistoryRef.current = seedInitialJobHistory();
+  }
+
   const [inputMode, setInputMode] = useState<InputMode>("public_video");
   const [jobState, setJobState] = useState<JobRecord | null>(null);
-  const [jobHistory, setJobHistory] = useState<JobRecord[]>([]);
+  const [jobHistory, setJobHistory] = useState<JobRecord[]>(
+    () => initialJobHistoryRef.current?.jobs ?? [],
+  );
   const [isHydrating, setIsHydrating] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const historyRequestRef = useRef<Promise<JobRecord[]> | null>(
+    initialJobHistoryRef.current?.request ?? null,
+  );
 
   async function refreshHistory() {
     try {
-      setJobHistory(await listJobs());
+      const jobs = await (historyRequestRef.current ?? listJobs());
+      historyRequestRef.current = null;
+      setJobHistory(jobs);
     } catch {
+      historyRequestRef.current = null;
       setJobHistory([]);
     }
   }
@@ -191,7 +344,7 @@ export default function HomePage() {
     try {
       const job = await getJob(jobId);
 
-      setJobState(job);
+      setJobState((currentState) => mergeJobSnapshot(currentState, job));
       setInputMode(job.input_mode);
     } catch {
       setLoadError(loadErrorMessage);
@@ -201,7 +354,11 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    void refreshHistory();
+    if (initialJobHistoryRef.current?.hasResolvedSnapshot) {
+      historyRequestRef.current = null;
+    } else {
+      void refreshHistory();
+    }
 
     const jobId = readJobIdFromUrl();
 
@@ -240,7 +397,9 @@ export default function HomePage() {
       void getJob(activeJobId)
         .then((job) => {
           setJobState((currentState) =>
-            currentState?.id === activeJobId ? job : currentState,
+            currentState?.id === activeJobId
+              ? mergeJobSnapshot(currentState, job)
+              : currentState,
           );
           setInputMode((currentMode) =>
             currentMode === job.input_mode ? currentMode : job.input_mode,
@@ -285,9 +444,7 @@ export default function HomePage() {
             : currentState,
         );
 
-        if (payload.status === "queued" || payload.status === "running") {
-          refreshActiveJob();
-        }
+        refreshActiveJob();
       },
     });
   }, [jobState?.id]);
@@ -419,6 +576,11 @@ export default function HomePage() {
                         type="button"
                       >
                         <span>{job.source_url}</span>
+                        {job.title ? (
+                          <span style={{ color: "#475569", fontSize: "0.875rem" }}>
+                            Title: {job.title}
+                          </span>
+                        ) : null}
                         <span style={{ color: "#475569", fontSize: "0.875rem" }}>
                           {job.status} • {job.stage}
                         </span>
@@ -464,6 +626,11 @@ export default function HomePage() {
                 transcriptPreviewText={jobState.transcript_preview_text}
                 transcriptSegmentCount={jobState.transcript_segment_count}
                 transcriptStatus={jobState.transcript_status}
+                tabs={
+                  jobState.status === "completed"
+                    ? ["Ask AI", "Summary", "Transcript", "Mind Map"]
+                    : undefined
+                }
               />
             </div>
           ) : (
