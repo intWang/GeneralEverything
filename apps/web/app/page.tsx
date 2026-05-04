@@ -62,6 +62,8 @@ function buildTimelineItems(jobState: JobRecord) {
       "The download shell has been prepared and the job is ready for the next media-processing step.",
     transcript_ready:
       "Audio extraction is complete and the transcript shell is ready to hand off into speech recognition.",
+    transcript_generated:
+      "A lightweight transcript shell has been generated and persisted, so downstream summary stages can start from real transcript context.",
   };
 
   const primaryLabelByStage: Record<string, string> = {
@@ -71,6 +73,7 @@ function buildTimelineItems(jobState: JobRecord) {
     downloading: `Job ${jobState.id} is progressing through the download shell.`,
     download_ready: `Job ${jobState.id} is ready for the download step.`,
     transcript_ready: `Job ${jobState.id} is ready for transcript generation.`,
+    transcript_generated: `Job ${jobState.id} generated a transcript shell preview.`,
   };
 
   return [
@@ -102,6 +105,8 @@ function buildTimelineItems(jobState: JobRecord) {
       detail:
         jobState.stage === "transcript_ready"
           ? "Audio is extracted and the transcript shell is now ready for the next speech-recognition step."
+          : jobState.stage === "transcript_generated"
+          ? "A first transcript shell preview is available, while richer transcript generation and downstream summary stages remain in progress."
           : jobState.stage === "download_ready"
           ? "The download shell is complete and the workflow is now preparing the transcript stage."
           : "Transcript, summary, mind map, and Ask AI will activate after the download stage is ready.",
@@ -340,6 +345,8 @@ export default function HomePage() {
                 jobStatus={jobState.status}
                 transcriptAudioArtifactPath={jobState.transcript_audio_artifact_path}
                 transcriptExtractor={jobState.transcript_extractor}
+                transcriptPreviewText={jobState.transcript_preview_text}
+                transcriptSegmentCount={jobState.transcript_segment_count}
                 transcriptStatus={jobState.transcript_status}
               />
             </div>

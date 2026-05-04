@@ -344,6 +344,74 @@ test("shows transcript-ready timeline and transcript shell details for a hydrate
   expect(screen.getByText("Extractor: ffmpeg")).toBeInTheDocument();
 });
 
+test("shows transcript-generated timeline and preview details for a hydrated job", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=99999999-9999-9999-9999-999999999999",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T13:40:00Z",
+    id: "99999999-9999-9999-9999-999999999999",
+    input_mode: "public_video",
+    source_url: "https://example.com/transcript-generated",
+    stage: "transcript_generated",
+    status: "running",
+    transcript_audio_artifact_path:
+      "var/transcripts/public-video/99999999-9999-9999-9999-999999999999.wav",
+    transcript_extractor: "ffmpeg",
+    transcript_preview_text:
+      "Transcript shell generated for 99999999-9999-9999-9999-999999999999.wav. Real speech recognition is not wired in yet.",
+    transcript_segment_count: 1,
+    transcript_status: "ready",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T13:40:00Z",
+      id: "99999999-9999-9999-9999-999999999999",
+      input_mode: "public_video",
+      source_url: "https://example.com/transcript-generated",
+      stage: "transcript_generated",
+      status: "running",
+      transcript_audio_artifact_path:
+        "var/transcripts/public-video/99999999-9999-9999-9999-999999999999.wav",
+      transcript_extractor: "ffmpeg",
+      transcript_preview_text:
+        "Transcript shell generated for 99999999-9999-9999-9999-999999999999.wav. Real speech recognition is not wired in yet.",
+      transcript_segment_count: 1,
+      transcript_status: "ready",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 99999999-9999-9999-9999-999999999999 generated a transcript shell preview.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByText(
+      "A first transcript shell preview is available, while richer transcript generation and downstream summary stages remain in progress.",
+    ),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(screen.getByText("Segment count: 1")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Preview: Transcript shell generated for 99999999-9999-9999-9999-999999999999.wav. Real speech recognition is not wired in yet.",
+    ),
+  ).toBeInTheDocument();
+});
+
 test("hydrates a revisited job from the URL query", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);

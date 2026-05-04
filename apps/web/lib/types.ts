@@ -8,6 +8,7 @@ export type JobStage =
   | "downloading"
   | "download_ready"
   | "transcript_ready"
+  | "transcript_generated"
   | "generating_transcript"
   | "building_summary"
   | "building_mindmap"
@@ -25,6 +26,8 @@ export type JobRecord = {
   status: JobStatus;
   transcript_audio_artifact_path?: string | null;
   transcript_extractor?: string | null;
+  transcript_preview_text?: string | null;
+  transcript_segment_count?: number | null;
   transcript_status?: string | null;
   thumbnail_url: string | null;
   title: string | null;

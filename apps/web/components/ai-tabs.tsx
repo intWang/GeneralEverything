@@ -20,6 +20,8 @@ type AITabsProps = {
   jobStatus?: JobStatus;
   transcriptAudioArtifactPath?: JobRecord["transcript_audio_artifact_path"];
   transcriptExtractor?: JobRecord["transcript_extractor"];
+  transcriptPreviewText?: JobRecord["transcript_preview_text"];
+  transcriptSegmentCount?: JobRecord["transcript_segment_count"];
   transcriptStatus?: JobRecord["transcript_status"];
   tabs?: readonly AITab[];
 };
@@ -49,6 +51,14 @@ function deriveTabShellStates(
       return {
         summary: "queued",
         transcript: "processing",
+        mindmap: "queued",
+      };
+    }
+
+    if (jobStage === "transcript_generated") {
+      return {
+        summary: "queued",
+        transcript: "partial",
         mindmap: "queued",
       };
     }
@@ -120,6 +130,8 @@ export function AITabs({
   jobStatus = "queued",
   transcriptAudioArtifactPath,
   transcriptExtractor,
+  transcriptPreviewText,
+  transcriptSegmentCount,
   transcriptStatus,
   tabs = DEFAULT_TABS,
 }: AITabsProps) {
@@ -169,8 +181,16 @@ export function AITabs({
                     "Transcript text has not been generated yet, but the audio artifact is now available to the next stage.",
                     "Summary and mind map remain queued until transcript generation starts.",
                   ]
+                : jobStage === "transcript_generated"
+                  ? [
+                      "A transcript shell preview is now available from the backend pipeline.",
+                      "The current output is still lightweight and will later grow into real segment-by-segment transcript content.",
+                      "Summary and mind map can begin once richer transcript generation is wired in.",
+                    ]
                 : undefined
             }
+            previewText={transcriptPreviewText}
+            segmentCount={transcriptSegmentCount}
             shellState={
               transcriptStatus === "failed" ? "failed" : shellStates.transcript
             }

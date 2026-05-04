@@ -183,3 +183,31 @@ test("shows transcript-ready shell details when audio extraction is complete", (
   ).toBeInTheDocument();
   expect(screen.getByText("Extractor: ffmpeg")).toBeInTheDocument();
 });
+
+test("shows transcript-generated shell preview details", () => {
+  render(
+    <AITabs
+      jobStage="transcript_generated"
+      jobStatus="running"
+      transcriptAudioArtifactPath="var/transcripts/public-video/222.wav"
+      transcriptExtractor="ffmpeg"
+      transcriptPreviewText="Transcript shell generated for 222.wav. Real speech recognition is not wired in yet."
+      transcriptSegmentCount={1}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(
+    screen.getByText("Transcript is streaming provisional lines"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("A transcript shell preview is now available from the backend pipeline."),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Segment count: 1")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Preview: Transcript shell generated for 222.wav. Real speech recognition is not wired in yet.",
+    ),
+  ).toBeInTheDocument();
+});
