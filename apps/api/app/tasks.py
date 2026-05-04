@@ -19,6 +19,11 @@ def _apply_public_video_metadata(job, metadata) -> None:
     job.stage = "metadata_ready"
 
 
+def _mark_public_video_download_ready(job) -> None:
+    job.status = JobStatus.RUNNING
+    job.stage = "download_ready"
+
+
 def _mark_public_video_probe_failure(job, exc: PublicVideoProbeError) -> None:
     job.status = JobStatus.FAILED
     job.stage = exc.reason
@@ -61,7 +66,24 @@ async def process_analysis_job(ctx: dict, job_id: UUID) -> None:
             await result
         return None
 
-    if job.stage == "metadata_ready" or job.status == JobStatus.FAILED:
+    if job.status == JobStatus.FAILED or job.stage == "download_ready":
+        return None
+
+    persist_job = ctx.get("persist_job") or _persist_loaded_job
+
+    if job.stage == "metadata_ready":
+        _mark_public_video_download_ready(job)
+        await _resolve(persist_job(job))
+        result = publisher(
+            "job.status",
+            {
+                "job_id": str(job_id),
+                "status": job.status.value,
+                "stage": job.stage,
+            },
+        )
+        if inspect.isawaitable(result):
+            await result
         return None
 
     probe_metadata = ctx.get("probe_public_video_metadata") or probe_public_video_metadata
@@ -69,7 +91,6 @@ async def process_analysis_job(ctx: dict, job_id: UUID) -> None:
         metadata = await _resolve(probe_metadata(job.source_url))
     except PublicVideoProbeError as exc:
         _mark_public_video_probe_failure(job, exc)
-        persist_job = ctx.get("persist_job") or _persist_loaded_job
         await _resolve(persist_job(job))
         result = publisher(
             "error",
@@ -84,11 +105,23 @@ async def process_analysis_job(ctx: dict, job_id: UUID) -> None:
         return None
 
     _apply_public_video_metadata(job, metadata)
-    persist_job = ctx.get("persist_job") or _persist_loaded_job
     await _resolve(persist_job(job))
     result = publisher(
         "video.metadata",
         {"job_id": str(job_id), "metadata": metadata.model_dump()},
+    )
+    if inspect.isawaitable(result):
+        await result
+
+    _mark_public_video_download_ready(job)
+    await _resolve(persist_job(job))
+    result = publisher(
+        "job.status",
+        {
+            "job_id": str(job_id),
+            "status": job.status.value,
+            "stage": job.stage,
+        },
     )
     if inspect.isawaitable(result):
         await result

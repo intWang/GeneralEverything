@@ -149,7 +149,7 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
         )
 
     def persist_job(updated_job: AnalysisJob) -> None:
-        persisted_jobs.append(updated_job)
+        persisted_jobs.append((updated_job.status.value, updated_job.stage))
 
     asyncio.run(
         process_analysis_job(
@@ -176,16 +176,27 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
                     "description": "A short description",
                 },
             },
-        )
+        ),
+        (
+            "job.status",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "status": "running",
+                "stage": "download_ready",
+            },
+        ),
     ]
-    assert persisted_jobs == [job]
+    assert persisted_jobs == [
+        ("running", "metadata_ready"),
+        ("running", "download_ready"),
+    ]
     assert job.title == "Sample Video"
     assert job.duration_seconds == 120
     assert job.thumbnail_url == "https://example.com/thumb.jpg"
     assert job.source_name == "Example Channel"
     assert job.description == "A short description"
     assert job.status == JobStatus.RUNNING
-    assert job.stage == "metadata_ready"
+    assert job.stage == "download_ready"
 
 
 def test_process_analysis_job_publishes_normalized_probe_error() -> None:
@@ -244,6 +255,7 @@ def test_process_analysis_job_publishes_normalized_probe_error() -> None:
 
 def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
     calls = []
+    persisted_jobs = []
     job = AnalysisJob(
         id=UUID("12345678-1234-5678-1234-567812345678"),
         input_mode=InputMode.PUBLIC_VIDEO,
@@ -263,18 +275,33 @@ def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
     def probe_metadata(_source_url: str) -> VideoMetadata:
         raise AssertionError("probe should not run when metadata is already ready")
 
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_jobs.append((updated_job.status.value, updated_job.stage))
+
     asyncio.run(
         process_analysis_job(
             {
                 "publish": publish,
                 "load_job": load_job,
+                "persist_job": persist_job,
                 "probe_public_video_metadata": probe_metadata,
             },
             UUID("12345678-1234-5678-1234-567812345678"),
         )
     )
 
-    assert calls == []
+    assert calls == [
+        (
+            "job.status",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "status": "running",
+                "stage": "download_ready",
+            },
+        )
+    ]
+    assert persisted_jobs == [("running", "download_ready")]
+    assert job.stage == "download_ready"
 
 
 def test_process_analysis_job_skips_reprobe_when_job_failed() -> None:
