@@ -25,7 +25,30 @@ class PublicVideoTranscriptShell:
         }
 
 
+@dataclass(slots=True)
+class PublicVideoTranscriptResult:
+    status: str
+    stage: str
+    preview_text: str | None
+    segment_count: int | None
+
+    def model_dump(self) -> dict[str, str | int | None]:
+        return {
+            "status": self.status,
+            "stage": self.stage,
+            "preview_text": self.preview_text,
+            "segment_count": self.segment_count,
+        }
+
+
 class PublicVideoTranscriptShellError(RuntimeError):
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.message = message
+
+
+class PublicVideoTranscriptExecutionError(RuntimeError):
     def __init__(self, reason: str, message: str) -> None:
         super().__init__(message)
         self.reason = reason
@@ -99,4 +122,43 @@ def prepare_public_video_transcript_shell(
         stage="transcript_ready",
         extractor="ffmpeg",
         audio_artifact_path=str(audio_artifact_path),
+    )
+
+
+def execute_public_video_transcript_shell(
+    job: object,
+    runner: Callable[[object], PublicVideoTranscriptResult] | None = None,
+) -> PublicVideoTranscriptResult:
+    transcript_status = getattr(job, "transcript_status", None)
+    if transcript_status and transcript_status != "ready":
+        raise PublicVideoTranscriptExecutionError(
+            "transcript_not_ready",
+            "The transcript shell is not ready for transcript generation.",
+        )
+
+    audio_artifact_path = getattr(job, "transcript_audio_artifact_path", None)
+    if not audio_artifact_path:
+        raise PublicVideoTranscriptExecutionError(
+            "missing_audio_artifact",
+            "The job does not have an extracted audio artifact for transcript generation.",
+        )
+
+    if runner is not None:
+        try:
+            return runner(job)
+        except OSError as exc:
+            raise PublicVideoTranscriptExecutionError(
+                "transcript_unavailable",
+                f"Unable to start transcript generation: {exc}",
+            ) from exc
+
+    preview = (
+        f"Transcript shell generated for {Path(audio_artifact_path).name}. "
+        "Real speech recognition is not wired in yet."
+    )
+    return PublicVideoTranscriptResult(
+        status="ready",
+        stage="transcript_generated",
+        preview_text=preview,
+        segment_count=1,
     )

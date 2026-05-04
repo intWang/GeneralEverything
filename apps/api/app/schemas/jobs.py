@@ -29,6 +29,8 @@ class JobResponse(BaseModel):
     transcript_status: str | None
     transcript_extractor: str | None
     transcript_audio_artifact_path: str | None
+    transcript_preview_text: str | None
+    transcript_segment_count: int | None
     status: JobStatus
     stage: str
     created_at: datetime

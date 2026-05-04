@@ -13,8 +13,11 @@ from app.services.downloads.public_video import (
     plan_public_video_download_shell,
 )
 from app.services.transcripts.public_video import (
+    PublicVideoTranscriptExecutionError,
+    PublicVideoTranscriptResult,
     PublicVideoTranscriptShell,
     PublicVideoTranscriptShellError,
+    execute_public_video_transcript_shell,
     prepare_public_video_transcript_shell,
 )
 from sqlalchemy.orm import object_session
@@ -63,6 +66,26 @@ def _apply_public_video_transcript_shell(
 
 
 def _mark_public_video_transcript_failure(job, exc: PublicVideoTranscriptShellError) -> None:
+    job.status = JobStatus.FAILED
+    job.stage = exc.reason
+    job.transcript_status = "failed"
+
+
+def _apply_public_video_transcript_result(
+    job,
+    transcript_result: PublicVideoTranscriptResult,
+) -> None:
+    job.transcript_status = transcript_result.status
+    job.transcript_preview_text = transcript_result.preview_text
+    job.transcript_segment_count = transcript_result.segment_count
+    job.status = JobStatus.RUNNING
+    job.stage = transcript_result.stage
+
+
+def _mark_public_video_transcript_execution_failure(
+    job,
+    exc: PublicVideoTranscriptExecutionError,
+) -> None:
     job.status = JobStatus.FAILED
     job.stage = exc.reason
     job.transcript_status = "failed"
@@ -130,6 +153,43 @@ async def _execute_public_video_download(
         publisher,
         "video.download",
         {"job_id": str(job_id), "download": download_shell.model_dump()},
+    )
+    await _publish_event(
+        publisher,
+        "job.status",
+        {
+            "job_id": str(job_id),
+            "status": job.status.value,
+            "stage": job.stage,
+        },
+    )
+
+    execute_transcript_shell = (
+        ctx.get("execute_public_video_transcript_shell")
+        or execute_public_video_transcript_shell
+    )
+    try:
+        transcript_result = await _resolve(execute_transcript_shell(job))
+    except PublicVideoTranscriptExecutionError as exc:
+        _mark_public_video_transcript_execution_failure(job, exc)
+        await _resolve(persist_job(job))
+        await _publish_event(
+            publisher,
+            "error",
+            {
+                "job_id": str(job_id),
+                "reason": exc.reason,
+                "message": exc.message,
+            },
+        )
+        return
+
+    _apply_public_video_transcript_result(job, transcript_result)
+    await _resolve(persist_job(job))
+    await _publish_event(
+        publisher,
+        "transcript.result",
+        {"job_id": str(job_id), "transcript": transcript_result.model_dump()},
     )
     await _publish_event(
         publisher,

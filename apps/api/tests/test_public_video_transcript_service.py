@@ -7,7 +7,9 @@ import pytest
 
 from app.models.job import AnalysisJob, InputMode, JobStatus
 from app.services.transcripts.public_video import (
+    PublicVideoTranscriptExecutionError,
     PublicVideoTranscriptShellError,
+    execute_public_video_transcript_shell,
     prepare_public_video_transcript_shell,
 )
 
@@ -76,3 +78,33 @@ def test_prepare_public_video_transcript_shell_normalizes_ffmpeg_failure() -> No
         prepare_public_video_transcript_shell(_make_job(), run_command=run_command)
 
     assert exc_info.value.reason == "extraction_failed"
+
+
+def test_execute_public_video_transcript_shell_returns_generated_result() -> None:
+    result = execute_public_video_transcript_shell(_make_job())
+
+    assert result.status == "ready"
+    assert result.stage == "transcript_generated"
+    assert result.segment_count == 1
+    assert "Real speech recognition is not wired in yet." in (result.preview_text or "")
+
+
+def test_execute_public_video_transcript_shell_requires_audio_artifact() -> None:
+    job = _make_job()
+    job.transcript_audio_artifact_path = None
+
+    with pytest.raises(PublicVideoTranscriptExecutionError) as exc_info:
+        execute_public_video_transcript_shell(job)
+
+    assert exc_info.value.reason == "missing_audio_artifact"
+
+
+def test_execute_public_video_transcript_shell_requires_ready_transcript_shell() -> None:
+    job = _make_job()
+    job.transcript_status = "failed"
+    job.transcript_audio_artifact_path = "var/transcripts/public-video/demo.wav"
+
+    with pytest.raises(PublicVideoTranscriptExecutionError) as exc_info:
+        execute_public_video_transcript_shell(job)
+
+    assert exc_info.value.reason == "transcript_not_ready"

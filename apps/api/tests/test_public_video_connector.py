@@ -195,6 +195,20 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
             },
         )
 
+    def execute_transcript(_job: AnalysisJob) -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_generated",
+            preview_text="Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav.",
+            segment_count=1,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_generated",
+                "preview_text": "Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav.",
+                "segment_count": 1,
+            },
+        )
+
     asyncio.run(
         process_analysis_job(
             {
@@ -205,6 +219,7 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
                 "plan_public_video_download_shell": lambda current_job: planned_download,
                 "execute_public_video_download_shell": execute_download,
                 "prepare_public_video_transcript_shell": prepare_transcript,
+                "execute_public_video_transcript_shell": execute_transcript,
             },
             UUID("12345678-1234-5678-1234-567812345678"),
         )
@@ -266,11 +281,32 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
                 "stage": "transcript_ready",
             },
         ),
+        (
+            "transcript.result",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "transcript": {
+                    "status": "ready",
+                    "stage": "transcript_generated",
+                    "preview_text": "Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav.",
+                    "segment_count": 1,
+                },
+            },
+        ),
+        (
+            "job.status",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "status": "running",
+                "stage": "transcript_generated",
+            },
+        ),
     ]
     assert persisted_jobs == [
         ("running", "metadata_ready"),
         ("running", "download_ready"),
         ("running", "transcript_ready"),
+        ("running", "transcript_generated"),
     ]
     assert job.title == "Sample Video"
     assert job.duration_seconds == 120
@@ -285,8 +321,10 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
     assert job.transcript_status == "ready"
     assert job.transcript_extractor == "ffmpeg"
     assert job.transcript_audio_artifact_path.endswith(".wav")
+    assert job.transcript_preview_text == "Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav."
+    assert job.transcript_segment_count == 1
     assert job.status == JobStatus.RUNNING
-    assert job.stage == "transcript_ready"
+    assert job.stage == "transcript_generated"
 
 
 def test_process_analysis_job_publishes_normalized_probe_error() -> None:
@@ -410,6 +448,20 @@ def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
             },
         )
 
+    def execute_transcript(_job: AnalysisJob) -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_generated",
+            preview_text="Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav.",
+            segment_count=1,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_generated",
+                "preview_text": "Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav.",
+                "segment_count": 1,
+            },
+        )
+
     asyncio.run(
         process_analysis_job(
             {
@@ -420,6 +472,7 @@ def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
                 "plan_public_video_download_shell": lambda current_job: planned_download,
                 "execute_public_video_download_shell": execute_download,
                 "prepare_public_video_transcript_shell": prepare_transcript,
+                "execute_public_video_transcript_shell": execute_transcript,
             },
             UUID("12345678-1234-5678-1234-567812345678"),
         )
@@ -468,9 +521,29 @@ def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
                 "stage": "transcript_ready",
             },
         ),
+        (
+            "transcript.result",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "transcript": {
+                    "status": "ready",
+                    "stage": "transcript_generated",
+                    "preview_text": "Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav.",
+                    "segment_count": 1,
+                },
+            },
+        ),
+        (
+            "job.status",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "status": "running",
+                "stage": "transcript_generated",
+            },
+        ),
     ]
-    assert persisted_jobs == [("running", "download_ready"), ("running", "transcript_ready")]
-    assert job.stage == "transcript_ready"
+    assert persisted_jobs == [("running", "download_ready"), ("running", "transcript_ready"), ("running", "transcript_generated")]
+    assert job.stage == "transcript_generated"
     assert job.download_status == "ready"
     assert job.download_executor == "yt-dlp"
 
