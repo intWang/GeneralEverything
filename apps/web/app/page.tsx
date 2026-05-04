@@ -283,6 +283,7 @@ export default function HomePage() {
   const [jobHistory, setJobHistory] = useState<JobRecord[]>(
     () => initialJobHistoryRef.current?.jobs ?? [],
   );
+  const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
   const [isHydrating, setIsHydrating] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const historyRequestRef = useRef<Promise<JobRecord[]> | null>(
@@ -388,6 +389,19 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    function syncHeaderScrollState() {
+      setIsHeaderScrolled(window.scrollY > 24);
+    }
+
+    syncHeaderScrollState();
+    window.addEventListener("scroll", syncHeaderScrollState, { passive: true });
+
+    return () => {
+      window.removeEventListener("scroll", syncHeaderScrollState);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!jobState?.id) {
       return;
     }
@@ -470,11 +484,16 @@ export default function HomePage() {
     <main className={styles.page} id="top">
       <header
         style={{
-          backdropFilter: "blur(12px)",
-          background: "rgba(255, 255, 255, 0.94)",
-          borderBottom: "1px solid #e2e8f0",
+          backdropFilter: isHeaderScrolled ? "blur(12px)" : "blur(6px)",
+          background: isHeaderScrolled
+            ? "rgba(255, 255, 255, 0.94)"
+            : "rgba(255, 255, 255, 0.18)",
+          borderBottom: isHeaderScrolled ? "1px solid #e2e8f0" : "1px solid transparent",
+          boxShadow: isHeaderScrolled ? "0 10px 30px rgba(15, 23, 42, 0.08)" : "none",
           position: "sticky",
           top: 0,
+          transition:
+            "background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, backdrop-filter 180ms ease",
           zIndex: 10,
         }}
       >
@@ -528,15 +547,16 @@ export default function HomePage() {
       <section className={styles.content} id="analysis-entry">
         <div style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
           <p className={styles.eyebrow} style={{ marginBottom: 0 }}>
-            Analysis entry
+            Workspace entry
           </p>
           <h2 className={styles.heroTitle} style={{ fontSize: "2.5rem" }}>
-            Start analysis
+            Start with a recording. Leave with searchable answers.
           </h2>
           <p className={styles.heroDescription} style={{ margin: 0 }}>
-            Paste a public video URL now, or switch modes to prepare for future
-            RingCentral recording support. The live workspace below will keep
-            the real job status, outputs, and follow-up panels intact.
+            Add a recording source to open one workspace for transcript review,
+            summary takeaways, and grounded follow-up questions. The live
+            analysis area below keeps status, recording context, and AI outputs
+            connected as the job progresses.
           </p>
         </div>
         <InputSwitcher onChange={setInputMode} value={inputMode} />

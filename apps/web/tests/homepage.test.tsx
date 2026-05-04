@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { vi } from "vitest";
 
 import HomePage from "../app/page";
@@ -72,7 +72,9 @@ test("keeps CTA anchors pointed at the analysis entry and workflow", () => {
     screen.getByRole("link", { name: "See workflow" }),
   ).toHaveAttribute("href", "#workflow");
   expect(
-    screen.getByRole("heading", { name: "Start analysis" }),
+    within(document.getElementById("analysis-entry")!).getByRole("heading", {
+      name: "Start with a recording. Leave with searchable answers.",
+    }),
   ).toBeInTheDocument();
   expect(screen.getByLabelText("Video source")).toBeInTheDocument();
 });
