@@ -9,6 +9,18 @@ export type SubmitJobQuestionResponse = {
   references: string[];
 };
 
+export class ApiError extends Error {
+  detail?: string;
+  status: number;
+
+  constructor(message: string, status: number, detail?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
 const DEFAULT_API_BASE_URL = "http://localhost:8000/api";
 
 export function getApiBaseUrl() {
@@ -28,7 +40,15 @@ async function readJson<T>(input: string, init?: RequestInit) {
   const response = await fetch(input, init);
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    let detail: string | undefined;
+    try {
+      const errorBody = (await response.json()) as { detail?: string };
+      detail = errorBody.detail;
+    } catch {
+      detail = undefined;
+    }
+
+    throw new ApiError(`Request failed: ${response.status}`, response.status, detail);
   }
 
   return (await response.json()) as T;

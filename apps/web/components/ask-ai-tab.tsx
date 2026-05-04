@@ -1,9 +1,13 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import styles from "../app/homepage.module.css";
-import { submitJobQuestion, type SubmitJobQuestionResponse } from "../lib/api";
+import {
+  ApiError,
+  submitJobQuestion,
+  type SubmitJobQuestionResponse,
+} from "../lib/api";
 
 export type AskAiShellState = "queued" | "processing" | "complete" | "failed";
 
@@ -77,10 +81,27 @@ const SHELL_COPY: Record<
 export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
   const [question, setQuestion] = useState("");
   const [answerShell, setAnswerShell] = useState<SubmitJobQuestionResponse | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const activeRequestIdRef = useRef(0);
   const copy = SHELL_COPY[shellState];
   const isReady = shellState === "complete";
-  const canSubmit = copy.canSubmit && !!jobId && question.trim().length > 0;
+  const canSubmit = copy.canSubmit && !!jobId && question.trim().length > 0 && !isSubmitting;
+
+  useEffect(() => {
+    activeRequestIdRef.current += 1;
+    setAnswerShell(null);
+    setQuestion("");
+    setSubmitError(null);
+    setIsSubmitting(false);
+  }, [jobId]);
+
+  useEffect(() => {
+    activeRequestIdRef.current += 1;
+    setAnswerShell(null);
+    setSubmitError(null);
+    setIsSubmitting(false);
+  }, [shellState]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -91,12 +112,36 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
 
     const nextQuestion = question.trim();
     setSubmitError(null);
+    setAnswerShell(null);
+    setIsSubmitting(true);
+    const requestId = activeRequestIdRef.current + 1;
+    activeRequestIdRef.current = requestId;
 
     try {
       const response = await submitJobQuestion(jobId, nextQuestion);
+      if (requestId !== activeRequestIdRef.current) {
+        return;
+      }
       setAnswerShell(response);
-    } catch {
-      setSubmitError("Unable to submit the grounded question right now.");
+    } catch (error) {
+      if (requestId !== activeRequestIdRef.current) {
+        return;
+      }
+      if (
+        error instanceof ApiError &&
+        error.status === 409 &&
+        error.detail === "Ask AI is not ready for grounded questions yet"
+      ) {
+        setSubmitError(
+          "Grounded context is still settling. Try again after more transcript and summary data land.",
+        );
+      } else {
+        setSubmitError("Unable to submit the grounded question right now.");
+      }
+    } finally {
+      if (requestId === activeRequestIdRef.current) {
+        setIsSubmitting(false);
+      }
     }
   }
 
@@ -118,7 +163,7 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
           <input
             aria-label="Ask a question"
             className={styles.askAiInput}
-            disabled={!copy.canDraft}
+            disabled={!copy.canDraft || isSubmitting}
             id="ask-ai-question"
             onChange={(event) => setQuestion(event.target.value)}
             placeholder="What should I review next?"
@@ -130,7 +175,7 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
             disabled={!canSubmit}
             type="submit"
           >
-            Submit question
+            {isSubmitting ? "Submitting..." : "Submit question"}
           </button>
         </div>
       </form>
