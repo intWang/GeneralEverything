@@ -25,6 +25,8 @@ beforeEach(() => {
 
 test("renders the new homepage narrative sections", () => {
   render(<HomePage />);
+  const capabilitiesSection = document.getElementById("capabilities")!;
+  const previewSection = document.getElementById("preview")!;
 
   expect(
     screen.getByRole("heading", {
@@ -53,13 +55,18 @@ test("renders the new homepage narrative sections", () => {
     }),
   ).toHaveAttribute("href", "#preview");
   expect(screen.getByText("Built for recorded meetings")).toBeInTheDocument();
-  expect(screen.getByText("Transcript")).toBeInTheDocument();
-  expect(screen.getByText("Summary")).toBeInTheDocument();
-  expect(screen.getByText("Ask AI")).toBeInTheDocument();
-  expect(screen.getByText("Mind Map")).toBeInTheDocument();
+  expect(within(capabilitiesSection).getByText("Transcript")).toBeInTheDocument();
+  expect(within(capabilitiesSection).getByText("Summary")).toBeInTheDocument();
+  expect(within(capabilitiesSection).getByText("Ask AI")).toBeInTheDocument();
+  expect(within(capabilitiesSection).getByText("Mind Map")).toBeInTheDocument();
   expect(screen.getByText("Meeting review")).toBeInTheDocument();
   expect(screen.getByText("Training recap")).toBeInTheDocument();
   expect(screen.getByText("Knowledge capture")).toBeInTheDocument();
+  expect(within(previewSection).getByText("Status timeline")).toBeInTheDocument();
+  expect(within(previewSection).getByText("Video info")).toBeInTheDocument();
+  expect(within(previewSection).getByText("Transcript")).toBeInTheDocument();
+  expect(within(previewSection).getByText("Summary")).toBeInTheDocument();
+  expect(within(previewSection).getByText("Ask AI")).toBeInTheDocument();
 });
 
 test("keeps CTA anchors pointed at the analysis entry and workflow", () => {

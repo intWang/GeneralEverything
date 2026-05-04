@@ -71,6 +71,34 @@ const useCases = [
   },
 ];
 
+const workspacePreviewBlocks = [
+  {
+    description:
+      "Watch the analysis move from intake through transcript, summary, and follow-up readiness without losing the current stage.",
+    title: "Status timeline",
+  },
+  {
+    description:
+      "Keep recording title, source, duration, and thumbnail context visible beside every downstream output.",
+    title: "Video info",
+  },
+  {
+    description:
+      "Scan the transcript first so teams can confirm what was said before jumping into takeaways or Q&A.",
+    title: "Transcript",
+  },
+  {
+    description:
+      "Turn long recordings into concise highlights, decisions, and next steps that are easier to share.",
+    title: "Summary",
+  },
+  {
+    description:
+      "Ask grounded follow-up questions once the transcript and summary are ready, without leaving the workspace.",
+    title: "Ask AI",
+  },
+];
+
 export function HomepageSections() {
   return (
     <>
@@ -230,51 +258,26 @@ export function HomepageSections() {
                 gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
               }}
             >
-              <div
-                style={{
-                  background: "#f8fafc",
-                  borderRadius: "0.75rem",
-                  padding: "1rem",
-                }}
-              >
-                <p className={styles.sectionLabel} style={{ margin: 0 }}>
-                  Status timeline
-                </p>
-                <p className={styles.workspaceDescription} style={{ marginTop: "0.5rem" }}>
-                  Follow each stage as the analysis job moves from intake to
-                  grounded answers.
-                </p>
-              </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  borderRadius: "0.75rem",
-                  padding: "1rem",
-                }}
-              >
-                <p className={styles.sectionLabel} style={{ margin: 0 }}>
-                  Recording context
-                </p>
-                <p className={styles.workspaceDescription} style={{ marginTop: "0.5rem" }}>
-                  Keep source metadata, titles, and runtime context next to the
-                  generated outputs.
-                </p>
-              </div>
-              <div
-                style={{
-                  background: "#f8fafc",
-                  borderRadius: "0.75rem",
-                  padding: "1rem",
-                }}
-              >
-                <p className={styles.sectionLabel} style={{ margin: 0 }}>
-                  AI workspace
-                </p>
-                <p className={styles.workspaceDescription} style={{ marginTop: "0.5rem" }}>
-                  Move between transcript review, summary drafts, topic maps,
-                  and follow-up answers without losing context.
-                </p>
-              </div>
+              {workspacePreviewBlocks.map((block) => (
+                <div
+                  key={block.title}
+                  style={{
+                    background: "#f8fafc",
+                    borderRadius: "0.75rem",
+                    padding: "1rem",
+                  }}
+                >
+                  <p className={styles.sectionLabel} style={{ margin: 0 }}>
+                    {block.title}
+                  </p>
+                  <p
+                    className={styles.workspaceDescription}
+                    style={{ marginTop: "0.5rem" }}
+                  >
+                    {block.description}
+                  </p>
+                </div>
+              ))}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
               <a
