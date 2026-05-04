@@ -1,9 +1,11 @@
+import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
 
-import HomePage from "../app/page";
 import * as api from "../lib/api";
 import * as sse from "../lib/sse";
+
+type HomePageComponent = typeof import("../app/page").default;
 
 vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
@@ -16,11 +18,72 @@ vi.mock("../lib/sse", () => ({
   subscribeToJobEvents: vi.fn(),
 }));
 
+let HomePage: HomePageComponent;
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.history.replaceState({}, "", "/");
   vi.mocked(sse.subscribeToJobEvents).mockReturnValue(() => undefined);
   vi.mocked(api.listJobs).mockResolvedValue([]);
+});
+
+beforeEach(async () => {
+  (globalThis as { React?: typeof React }).React = React;
+  ({ default: HomePage } = await import("../app/page"));
+});
+
+test("renders the new homepage narrative sections", () => {
+  render(<HomePage />);
+
+  expect(
+    screen.getByRole("heading", {
+      name: "Turn recordings into transcripts, summaries, and answers.",
+    }),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Video analysis for teams")).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", {
+      name: "Capabilities",
+    }),
+  ).toHaveAttribute("href", "#capabilities");
+  expect(
+    screen.getByRole("link", {
+      name: "Workflow",
+    }),
+  ).toHaveAttribute("href", "#workflow");
+  expect(
+    screen.getByRole("link", {
+      name: "Use Cases",
+    }),
+  ).toHaveAttribute("href", "#use-cases");
+  expect(
+    screen.getByRole("link", {
+      name: "Preview",
+    }),
+  ).toHaveAttribute("href", "#preview");
+  expect(screen.getByText("Built for recorded meetings")).toBeInTheDocument();
+  expect(screen.getByText("Transcript")).toBeInTheDocument();
+  expect(screen.getByText("Summary")).toBeInTheDocument();
+  expect(screen.getByText("Ask AI")).toBeInTheDocument();
+  expect(screen.getByText("Mind Map")).toBeInTheDocument();
+  expect(screen.getByText("Meeting review")).toBeInTheDocument();
+  expect(screen.getByText("Training recap")).toBeInTheDocument();
+  expect(screen.getByText("Knowledge capture")).toBeInTheDocument();
+});
+
+test("keeps CTA anchors pointed at the analysis entry and workflow", () => {
+  render(<HomePage />);
+
+  expect(
+    screen.getAllByRole("link", { name: "Start analysis" })[0],
+  ).toHaveAttribute("href", "#analysis-entry");
+  expect(
+    screen.getByRole("link", { name: "See workflow" }),
+  ).toHaveAttribute("href", "#workflow");
+  expect(
+    screen.getByRole("heading", { name: "Start analysis" }),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText("Video source")).toBeInTheDocument();
 });
 
 test("renders both input modes as accessible radio options", () => {
