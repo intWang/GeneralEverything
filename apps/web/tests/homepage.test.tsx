@@ -234,6 +234,147 @@ test("hydrates a revisited job from the URL query", async () => {
   ).toBeInTheDocument();
 });
 
+test("surfaces the Ask AI ready shell for a completed revisited job", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=44444444-4444-4444-4444-444444444444",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T12:00:00Z",
+    id: "44444444-4444-4444-4444-444444444444",
+    input_mode: "public_video",
+    source_url: "https://example.com/completed",
+    stage: "building_mindmap",
+    status: "completed",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T12:00:00Z",
+      id: "44444444-4444-4444-4444-444444444444",
+      input_mode: "public_video",
+      source_url: "https://example.com/completed",
+      stage: "building_mindmap",
+      status: "completed",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 44444444-4444-4444-4444-444444444444 is completed for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "What should I follow up on?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
+
+  expect(
+    screen.getByText("Grounding source: finalized transcript and summary shells."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText('Question staged for the future QA pipeline: "What should I follow up on?"'),
+  ).toBeInTheDocument();
+});
+
+test("resets Ask AI draft state when switching between jobs", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T12:00:00Z",
+      id: "44444444-4444-4444-4444-444444444444",
+      input_mode: "public_video",
+      source_url: "https://example.com/completed-a",
+      stage: "building_mindmap",
+      status: "completed",
+    },
+    {
+      created_at: "2026-05-04T12:05:00Z",
+      id: "77777777-7777-7777-7777-777777777777",
+      input_mode: "public_video",
+      source_url: "https://example.com/completed-b",
+      stage: "building_mindmap",
+      status: "completed",
+    },
+  ]);
+  getJob.mockImplementation(async (jobId) => {
+    if (jobId === "44444444-4444-4444-4444-444444444444") {
+      return {
+        created_at: "2026-05-04T12:00:00Z",
+        id: jobId,
+        input_mode: "public_video",
+        source_url: "https://example.com/completed-a",
+        stage: "building_mindmap",
+        status: "completed",
+      };
+    }
+
+    return {
+      created_at: "2026-05-04T12:05:00Z",
+      id: jobId,
+      input_mode: "public_video",
+      source_url: "https://example.com/completed-b",
+      stage: "building_mindmap",
+      status: "completed",
+    };
+  });
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=44444444-4444-4444-4444-444444444444",
+  );
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 44444444-4444-4444-4444-444444444444 is completed for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "What should I follow up on?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
+
+  expect(
+    screen.getByText('Question staged for the future QA pipeline: "What should I follow up on?"'),
+  ).toBeInTheDocument();
+
+  fireEvent.click(
+    screen.getByRole("button", { name: /https:\/\/example.com\/completed-b/i }),
+  );
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 77777777-7777-7777-7777-777777777777 is completed for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(
+    screen.queryByText('Question staged for the future QA pipeline: "What should I follow up on?"'),
+  ).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Ask a question")).toHaveValue("");
+  expect(screen.getByText("Answer placeholder")).toBeInTheDocument();
+});
+
 test("keeps the created job visible when follow-up hydration fails", async () => {
   const createJob = vi.mocked(api.createJob);
   const getJob = vi.mocked(api.getJob);

@@ -45,12 +45,17 @@ test("switches between progressive AI result states", () => {
   expect(screen.getByText("Queued")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
-  expect(screen.getByText("Ask AI placeholder")).toBeInTheDocument();
   expect(
     screen.getByText(
-      "Ask AI shell only. Question input, grounding rules, and answer states will land in the next task.",
+      "Ask AI is waiting for grounded context",
     ),
   ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Grounding unlocks after transcript coverage and a stable summary shell are available.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submit question" })).toBeDisabled();
 });
 
 test("shows complete-style shells for a completed job", () => {
@@ -69,6 +74,22 @@ test("shows complete-style shells for a completed job", () => {
   fireEvent.click(screen.getByRole("tab", { name: "Mind Map" }));
   expect(
     screen.getByText("Mind map shell is ready for the final topic tree"),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "What should I review first?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
+
+  expect(
+    screen.getByText("Ask AI shell is ready for grounded follow-ups"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Grounding source: finalized transcript and summary shells."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText('Question staged for the future QA pipeline: "What should I review first?"'),
   ).toBeInTheDocument();
 });
 
@@ -109,4 +130,30 @@ test("shows blocked shells for failed jobs", () => {
   expect(
     screen.getByText("Mind map is blocked by the failed analysis run"),
   ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  expect(
+    screen.getByText("Ask AI is blocked by the failed analysis run"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Grounding is unavailable until this analysis is rerun successfully."),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submit question" })).toBeDisabled();
+});
+
+test("shows Ask AI in grounding mode while summary context is still stabilizing", () => {
+  render(<AITabs jobStage="building_summary" jobStatus="running" />);
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+
+  expect(
+    screen.getByText("Ask AI is preparing grounded answers"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Grounding is still shifting, so questions can be drafted but not submitted yet.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByLabelText("Ask a question")).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Submit question" })).toBeDisabled();
 });

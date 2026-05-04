@@ -249,7 +249,11 @@ export default function HomePage() {
                 jobId={jobState.id}
                 sourceLabel={jobState.source_url}
               />
-              <AITabs jobStage={jobState.stage} jobStatus={jobState.status} />
+              <AITabs
+                activeJobId={jobState.id}
+                jobStage={jobState.stage}
+                jobStatus={jobState.status}
+              />
             </div>
           ) : (
             <section aria-label="Analysis workspace" className={styles.panel}>

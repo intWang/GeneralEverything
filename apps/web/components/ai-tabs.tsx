@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import styles from "../app/homepage.module.css";
-import { AskAiTab } from "./ask-ai-tab";
+import { AskAiTab, type AskAiShellState } from "./ask-ai-tab";
 import { MindMapTab } from "./mindmap-tab";
 import { SummaryTab } from "./summary-tab";
 import { TranscriptTab } from "./transcript-tab";
@@ -15,6 +15,7 @@ const DEFAULT_TABS = ["Summary", "Transcript", "Mind Map", "Ask AI"] as const;
 type AITab = (typeof DEFAULT_TABS)[number];
 
 type AITabsProps = {
+  activeJobId?: string;
   jobStage?: string;
   jobStatus?: JobStatus;
   tabs?: readonly AITab[];
@@ -79,13 +80,38 @@ function deriveTabShellStates(
   };
 }
 
+function deriveAskAiShellState(
+  jobStatus: JobStatus,
+  jobStage?: string,
+): AskAiShellState {
+  if (jobStatus === "completed") {
+    return "complete";
+  }
+
+  if (jobStatus === "failed") {
+    return "failed";
+  }
+
+  if (jobStatus === "running") {
+    if (jobStage?.includes("transcript")) {
+      return "queued";
+    }
+
+    return "processing";
+  }
+
+  return "queued";
+}
+
 export function AITabs({
+  activeJobId,
   jobStage,
   jobStatus = "queued",
   tabs = DEFAULT_TABS,
 }: AITabsProps) {
   const [activeTab, setActiveTab] = useState<AITab>(tabs[0] ?? "Summary");
   const shellStates = deriveTabShellStates(jobStatus, jobStage);
+  const askAiShellState = deriveAskAiShellState(jobStatus, jobStage);
 
   return (
     <section aria-label="AI analysis panels" className={styles.panel}>
@@ -124,7 +150,13 @@ export function AITabs({
         {activeTab === "Mind Map" ? (
           <MindMapTab shellState={shellStates.mindmap} />
         ) : null}
-        {activeTab === "Ask AI" ? <AskAiTab /> : null}
+        {activeTab === "Ask AI" ? (
+          <AskAiTab
+            jobId={activeJobId}
+            key={activeJobId ?? "ask-ai-shell"}
+            shellState={askAiShellState}
+          />
+        ) : null}
       </div>
     </section>
   );

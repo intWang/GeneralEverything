@@ -1,15 +1,137 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+
 import styles from "../app/homepage.module.css";
 
-export function AskAiTab() {
+export type AskAiShellState = "queued" | "processing" | "complete" | "failed";
+
+type AskAiTabProps = {
+  jobId?: string;
+  shellState?: AskAiShellState;
+};
+
+const SHELL_COPY: Record<
+  AskAiShellState,
+  {
+    answerBody: string;
+    answerTitle: string;
+    body: string;
+    canDraft: boolean;
+    canSubmit: boolean;
+    eyebrow: string;
+    readyMessage: string;
+    title: string;
+  }
+> = {
+  queued: {
+    answerBody:
+      "Answers will appear here once the analysis has enough grounded context to answer safely.",
+    answerTitle: "Answer placeholder",
+    body: "Draft a question now, but submission stays locked until transcript coverage and a stable summary shell exist.",
+    canDraft: true,
+    canSubmit: false,
+    eyebrow: "Queued",
+    readyMessage:
+      "Grounding unlocks after transcript coverage and a stable summary shell are available.",
+    title: "Ask AI is waiting for grounded context",
+  },
+  processing: {
+    answerBody:
+      "The answer area stays blank while the shell is still tightening its grounding context.",
+    answerTitle: "Answer placeholder",
+    body: "Transcript context is available, but the analysis shell is still tightening summary and topic structure before Q&A can open.",
+    canDraft: true,
+    canSubmit: false,
+    eyebrow: "Grounding",
+    readyMessage:
+      "Grounding is still shifting, so questions can be drafted but not submitted yet.",
+    title: "Ask AI is preparing grounded answers",
+  },
+  complete: {
+    answerBody:
+      "Submit a question to reserve this panel for the grounded answer shell that a later task will hydrate.",
+    answerTitle: "Answer placeholder",
+    body: "Ask a question to preview where a grounded answer will appear once the real Q&A backend lands.",
+    canDraft: true,
+    canSubmit: true,
+    eyebrow: "Ready",
+    readyMessage: "Grounding source: finalized transcript and summary shells.",
+    title: "Ask AI shell is ready for grounded follow-ups",
+  },
+  failed: {
+    answerBody:
+      "No grounded answer can be prepared from incomplete analysis data.",
+    answerTitle: "Answer unavailable",
+    body: "The Q&A shell stays disabled so it does not imply answers can be grounded to incomplete analysis data.",
+    canDraft: false,
+    canSubmit: false,
+    eyebrow: "Failed",
+    readyMessage:
+      "Grounding is unavailable until this analysis is rerun successfully.",
+    title: "Ask AI is blocked by the failed analysis run",
+  },
+};
+
+export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
+  const [question, setQuestion] = useState("");
+  const [stagedQuestion, setStagedQuestion] = useState<string | null>(null);
+  const copy = SHELL_COPY[shellState];
+  const isReady = shellState === "complete";
+  const canSubmit = copy.canSubmit && question.trim().length > 0;
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canSubmit) {
+      return;
+    }
+
+    setStagedQuestion(question.trim());
+  }
+
   return (
-    <div>
-      <h3 className={styles.tabSectionTitle}>Ask AI placeholder</h3>
-      <p className={styles.tabSectionBody}>
-        Ask AI remains a Task 12 surface. This tab stays visible for product continuity, but the real Q&A workflow and readiness rules are intentionally deferred.
+    <div className={styles.askAiShell} data-job-id={jobId}>
+      <p className={styles.tabStateLabel} data-state={shellState}>
+        {copy.eyebrow}
       </p>
-      <p className={styles.askAiStatus}>
-        Ask AI shell only. Question input, grounding rules, and answer states will land in the next task.
+      <h3 className={styles.tabSectionTitle}>{copy.title}</h3>
+      <p className={styles.tabSectionBody}>{copy.body}</p>
+      <p className={styles.askAiStatus} data-ready={isReady}>
+        {copy.readyMessage}
       </p>
+      <form className={styles.askAiComposer} onSubmit={handleSubmit}>
+        <label className={styles.askAiLabel} htmlFor="ask-ai-question">
+          Ask a question
+        </label>
+        <div className={styles.askAiInputRow}>
+          <input
+            aria-label="Ask a question"
+            className={styles.askAiInput}
+            disabled={!copy.canDraft}
+            id="ask-ai-question"
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="What should I review next?"
+            type="text"
+            value={question}
+          />
+          <button
+            className={styles.askAiButton}
+            disabled={!canSubmit}
+            type="submit"
+          >
+            Submit question
+          </button>
+        </div>
+      </form>
+      <section className={styles.askAiAnswerShell}>
+        <h4 className={styles.askAiAnswerTitle}>{copy.answerTitle}</h4>
+        <p className={styles.tabSectionBody}>
+          {stagedQuestion
+            ? `Question staged for the future QA pipeline: "${stagedQuestion}"`
+            : copy.answerBody}
+        </p>
+      </section>
     </div>
   );
 }
