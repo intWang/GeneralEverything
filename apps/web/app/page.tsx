@@ -6,6 +6,7 @@ import styles from "./homepage.module.css";
 import { AITabs } from "../components/ai-tabs";
 import { AnalyzeForm } from "../components/analyze-form";
 import { Hero } from "../components/hero";
+import { HomepageSections } from "../components/homepage-sections";
 import { InputSwitcher } from "../components/input-switcher";
 import { StatusTimeline } from "../components/status-timeline";
 import { VideoInfoPanel } from "../components/video-info-panel";
@@ -29,6 +30,10 @@ function getTimelineState(jobState: JobRecord) {
 }
 
 function buildTimelineItems(jobState: JobRecord) {
+  const prefersGenericStatusLabel =
+    jobState.status === "completed" ||
+    jobState.status === "failed" ||
+    (jobState.status === "running" && jobState.stage === "queued");
   const primaryState = getTimelineState(jobState);
   const downloadState =
     jobState.stage === "download_ready" || jobState.status === "completed"
@@ -85,8 +90,10 @@ function buildTimelineItems(jobState: JobRecord) {
   return [
     {
       label:
-        primaryLabelByStage[jobState.stage] ??
-        `Job ${jobState.id} is ${jobState.status} for analysis.`,
+        prefersGenericStatusLabel
+          ? `Job ${jobState.id} is ${jobState.status} for analysis.`
+          : primaryLabelByStage[jobState.stage] ??
+            `Job ${jobState.id} is ${jobState.status} for analysis.`,
       detail:
         primaryDetailByStage[jobState.stage] ??
         "The backend is coordinating the saved analysis shell with live stage updates.",
@@ -118,7 +125,7 @@ function buildTimelineItems(jobState: JobRecord) {
           : jobState.stage === "mindmap_generated"
           ? "A first mind map shell preview is available, while richer Ask AI and final completion states can build on the saved topic structure."
           : jobState.stage === "download_ready"
-          ? "The download shell is complete and the workflow is now preparing the transcript stage."
+          ? "The job has reached the handoff point for later transcript, summary, mind map, and Ask AI stages."
           : "Transcript, summary, mind map, and Ask AI will activate after the download stage is ready.",
       state: aiState,
     },
@@ -277,7 +284,10 @@ export default function HomePage() {
               }
             : currentState,
         );
-        refreshActiveJob();
+
+        if (payload.status === "queued" || payload.status === "running") {
+          refreshActiveJob();
+        }
       },
     });
   }, [jobState?.id]);
@@ -300,9 +310,78 @@ export default function HomePage() {
   }
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} id="top">
+      <header
+        style={{
+          backdropFilter: "blur(12px)",
+          background: "rgba(255, 255, 255, 0.94)",
+          borderBottom: "1px solid #e2e8f0",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <div
+          className={styles.content}
+          style={{
+            alignItems: "center",
+            display: "flex",
+            gap: "1rem",
+            justifyContent: "space-between",
+            paddingBottom: "1rem",
+            paddingTop: "1rem",
+          }}
+        >
+          <a
+            href="#top"
+            style={{
+              color: "#0f172a",
+              fontSize: "1.125rem",
+              fontWeight: 700,
+              textDecoration: "none",
+            }}
+          >
+            Video Analysis
+          </a>
+          <div
+            style={{
+              alignItems: "center",
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "1rem",
+              justifyContent: "flex-end",
+            }}
+          >
+            <a href="#capabilities">Capabilities</a>
+            <a href="#workflow">Workflow</a>
+            <a href="#use-cases">Use Cases</a>
+            <a href="#preview">Preview</a>
+            <a
+              className={styles.primaryButton}
+              href="#analysis-entry"
+              style={{ display: "inline-flex", textDecoration: "none" }}
+            >
+              Start analysis
+            </a>
+          </div>
+        </div>
+      </header>
       <Hero />
-      <section className={styles.content}>
+      {!jobState ? <HomepageSections /> : null}
+      <section className={styles.content} id="analysis-entry">
+        <div style={{ display: "grid", gap: "0.75rem", marginBottom: "1.5rem" }}>
+          <p className={styles.eyebrow} style={{ marginBottom: 0 }}>
+            Analysis entry
+          </p>
+          <h2 className={styles.heroTitle} style={{ fontSize: "2.5rem" }}>
+            Start analysis
+          </h2>
+          <p className={styles.heroDescription} style={{ margin: 0 }}>
+            Paste a public video URL now, or switch modes to prepare for future
+            RingCentral recording support. The live workspace below will keep
+            the real job status, outputs, and follow-up panels intact.
+          </p>
+        </div>
         <InputSwitcher onChange={setInputMode} value={inputMode} />
         <div className={styles.workflowLayout}>
           <div style={{ display: "grid", gap: "1rem" }}>
@@ -339,10 +418,7 @@ export default function HomePage() {
                         }}
                         type="button"
                       >
-                        <span>{job.title || job.source_url}</span>
-                        <span style={{ color: "#475569", fontSize: "0.875rem" }}>
-                          {job.source_url}
-                        </span>
+                        <span>{job.source_url}</span>
                         <span style={{ color: "#475569", fontSize: "0.875rem" }}>
                           {job.status} • {job.stage}
                         </span>
