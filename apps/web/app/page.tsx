@@ -229,9 +229,26 @@ export default function HomePage() {
     }
 
     const activeJobId = jobState.id;
+    const refreshActiveJob = () => {
+      void getJob(activeJobId)
+        .then((job) => {
+          setJobState((currentState) =>
+            currentState?.id === activeJobId ? job : currentState,
+          );
+          setInputMode((currentMode) =>
+            currentMode === job.input_mode ? currentMode : job.input_mode,
+          );
+        })
+        .catch(() => undefined);
+    };
 
     return subscribeToJobEvents(jobState.id, {
       onEvent: (event) => {
+        if (event.event === "qa.ready") {
+          refreshActiveJob();
+          return;
+        }
+
         if (event.event !== "job.status") {
           return;
         }
@@ -260,17 +277,7 @@ export default function HomePage() {
               }
             : currentState,
         );
-
-        void getJob(activeJobId)
-          .then((job) => {
-            setJobState((currentState) =>
-              currentState?.id === activeJobId ? job : currentState,
-            );
-            setInputMode((currentMode) =>
-              currentMode === job.input_mode ? currentMode : job.input_mode,
-            );
-          })
-          .catch(() => undefined);
+        refreshActiveJob();
       },
     });
   }, [jobState?.id]);

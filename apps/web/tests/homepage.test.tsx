@@ -271,6 +271,96 @@ test("refreshes the active job snapshot when a status event arrives", async () =
   expect(getJob).toHaveBeenCalledTimes(2);
 });
 
+test("refreshes the active job snapshot when a qa.ready event arrives", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=78787878-7878-7878-7878-787878787878",
+  );
+  getJob
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T16:10:00Z",
+      id: "78787878-7878-7878-7878-787878787878",
+      input_mode: "public_video",
+      source_url: "https://example.com/qa-ready",
+      stage: "mindmap_generated",
+      status: "running",
+      summary_status: "ready",
+      mindmap_status: "ready",
+      transcript_segment_count: 2,
+      title: "Before qa.ready",
+    })
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T16:10:00Z",
+      id: "78787878-7878-7878-7878-787878787878",
+      input_mode: "public_video",
+      source_url: "https://example.com/qa-ready",
+      stage: "mindmap_generated",
+      status: "running",
+      summary_status: "ready",
+      mindmap_status: "ready",
+      transcript_segment_count: 3,
+      title: "After qa.ready",
+    });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:10:00Z",
+      id: "78787878-7878-7878-7878-787878787878",
+      input_mode: "public_video",
+      source_url: "https://example.com/qa-ready",
+      stage: "mindmap_generated",
+      status: "running",
+      summary_status: "ready",
+      mindmap_status: "ready",
+      transcript_segment_count: 2,
+      title: "Before qa.ready",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByText("Before qa.ready")).toBeInTheDocument();
+  });
+
+  handlers?.onEvent?.({
+    event: "qa.ready",
+    data: {
+      job_id: "78787878-7878-7878-7878-787878787878",
+      can_submit: true,
+      transcript_segment_count: 3,
+    },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("After qa.ready")).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "Can I ask now?" },
+  });
+
+  expect(
+    screen.getByText("Ask AI shell is ready for grounded follow-ups"),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submit question" })).toBeEnabled();
+  expect(getJob).toHaveBeenCalledTimes(2);
+});
+
 test("shows metadata-ready timeline copy for a hydrated job", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);

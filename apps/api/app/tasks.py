@@ -30,6 +30,7 @@ from app.services.mindmaps.public_video import (
     PublicVideoMindMapShellError,
     generate_public_video_mindmap_shell,
 )
+from app.services.qa_pipeline import qa_is_ready
 from sqlalchemy.orm import object_session
 
 
@@ -159,6 +160,32 @@ async def _publish_event(publisher, event_name: str, payload: dict) -> None:
     result = publisher(event_name, payload)
     if inspect.isawaitable(result):
         await result
+
+
+async def _publish_public_video_qa_ready(
+    *,
+    publisher,
+    job,
+    job_id: UUID,
+) -> None:
+    if not qa_is_ready(
+        job.transcript_segment_count,
+        job.summary_status,
+        job.mindmap_status,
+    ):
+        return
+
+    await _publish_event(
+        publisher,
+        "qa.ready",
+        {
+            "job_id": str(job_id),
+            "can_submit": True,
+            "transcript_segment_count": job.transcript_segment_count,
+            "summary_status": job.summary_status,
+            "mindmap_status": job.mindmap_status,
+        },
+    )
 
 
 async def _execute_public_video_download(
@@ -358,6 +385,12 @@ async def _execute_public_video_download(
             "status": job.status.value,
             "stage": job.stage,
         },
+    )
+
+    await _publish_public_video_qa_ready(
+        publisher=publisher,
+        job=job,
+        job_id=job_id,
     )
 
     _complete_public_video_job(job)
