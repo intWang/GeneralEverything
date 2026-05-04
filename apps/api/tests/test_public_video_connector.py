@@ -371,6 +371,14 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
                 "stage": "mindmap_generated",
             },
         ),
+        (
+            "job.status",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "status": "completed",
+                "stage": "mindmap_generated",
+            },
+        ),
     ]
     assert persisted_jobs == [
         ("running", "metadata_ready"),
@@ -379,6 +387,7 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
         ("running", "transcript_generated"),
         ("running", "summary_generated"),
         ("running", "mindmap_generated"),
+        ("completed", "mindmap_generated"),
     ]
     assert job.title == "Sample Video"
     assert job.duration_seconds == 120
@@ -401,7 +410,7 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
     assert job.mindmap_status == "ready"
     assert job.mindmap_preview_text == "Mind map shell generated from summary preview."
     assert job.mindmap_node_count == 1
-    assert job.status == JobStatus.RUNNING
+    assert job.status == JobStatus.COMPLETED
     assert job.stage == "mindmap_generated"
 
 

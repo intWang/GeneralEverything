@@ -135,6 +135,10 @@ def _mark_public_video_mindmap_failure(job, exc: PublicVideoMindMapShellError) -
     job.mindmap_status = "failed"
 
 
+def _complete_public_video_job(job) -> None:
+    job.status = JobStatus.COMPLETED
+
+
 def _persist_loaded_job(job) -> None:
     session = object_session(job)
     if session is None:
@@ -346,6 +350,18 @@ async def _execute_public_video_download(
         "mindmap.shell",
         {"job_id": str(job_id), "mindmap": mindmap_shell.model_dump()},
     )
+    await _publish_event(
+        publisher,
+        "job.status",
+        {
+            "job_id": str(job_id),
+            "status": job.status.value,
+            "stage": job.stage,
+        },
+    )
+
+    _complete_public_video_job(job)
+    await _resolve(persist_job(job))
     await _publish_event(
         publisher,
         "job.status",
