@@ -80,7 +80,11 @@ test("shows complete-style shells for a completed job", () => {
     grounded: true,
     job_id: "completed-job",
     question: "What should I review first?",
-    references: ["Transcript shell", "Summary shell", "Mind map shell"],
+    references: [
+      "Transcript: Transcript shell generated for completed.wav.",
+      "Summary: Summary shell generated from transcript preview.",
+      "Mind map: Mind map shell generated from summary preview.",
+    ],
   });
 
   render(
@@ -218,7 +222,11 @@ test("submits a grounded Ask AI question and renders the backend answer shell", 
     grounded: true,
     job_id: "job-123",
     question: "What should I review next?",
-    references: ["Transcript shell", "Summary shell", "Mind map shell"],
+    references: [
+      "Transcript: Transcript shell generated for 222.wav.",
+      "Summary: Summary shell generated from transcript preview.",
+      "Mind map: Mind map shell generated from summary preview.",
+    ],
   });
 
   render(
@@ -250,7 +258,9 @@ test("submits a grounded Ask AI question and renders the backend answer shell", 
     ),
   ).toBeInTheDocument();
   expect(screen.getByText("References")).toBeInTheDocument();
-  expect(screen.getByText("Transcript shell")).toBeInTheDocument();
+  expect(
+    screen.getByText("Transcript: Transcript shell generated for 222.wav."),
+  ).toBeInTheDocument();
 });
 
 test("shows transcript-ready shell details when audio extraction is complete", () => {

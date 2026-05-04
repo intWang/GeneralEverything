@@ -299,8 +299,11 @@ def test_submit_job_question_returns_grounded_answer_shell(tmp_path) -> None:
             persisted_job.stage = "mindmap_generated"
             persisted_job.status = jobs_routes.JobStatus.RUNNING
             persisted_job.transcript_segment_count = 3
+            persisted_job.transcript_preview_text = "Transcript shell generated for sample.wav."
             persisted_job.summary_status = "ready"
+            persisted_job.summary_preview_text = "Summary shell generated from transcript preview."
             persisted_job.mindmap_status = "ready"
+            persisted_job.mindmap_preview_text = "Mind map shell generated from summary preview."
             session.commit()
 
         response = client.post(
@@ -322,9 +325,9 @@ def test_submit_job_question_returns_grounded_answer_shell(tmp_path) -> None:
         "job_id": job_id,
         "question": "What should I review next?",
         "references": [
-            "Transcript shell",
-            "Summary shell",
-            "Mind map shell",
+            "Transcript: Transcript shell generated for sample.wav.",
+            "Summary: Summary shell generated from transcript preview.",
+            "Mind map: Mind map shell generated from summary preview.",
         ],
     }
 

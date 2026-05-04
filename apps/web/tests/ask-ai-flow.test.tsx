@@ -34,7 +34,11 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
     grounded: true,
     job_id: "55555555-5555-5555-5555-555555555555",
     question: "What should I review next?",
-    references: ["Transcript shell", "Summary shell", "Mind map shell"],
+    references: [
+      "Transcript: Transcript shell generated for homepage.wav.",
+      "Summary: Summary shell generated from transcript preview.",
+      "Mind map: Mind map shell generated from summary preview.",
+    ],
   });
 
   window.history.replaceState(
@@ -92,6 +96,9 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
     ),
   ).toBeInTheDocument();
   expect(screen.getByText("References")).toBeInTheDocument();
+  expect(
+    screen.getByText("Transcript: Transcript shell generated for homepage.wav."),
+  ).toBeInTheDocument();
 });
 
 test("keeps Ask AI submission blocked while grounding is still stabilizing", async () => {

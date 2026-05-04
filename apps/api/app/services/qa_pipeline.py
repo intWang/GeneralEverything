@@ -29,6 +29,13 @@ class QAAnswerNotReadyError(RuntimeError):
     pass
 
 
+def _build_reference(label: str, preview_text: str | None) -> str:
+    if preview_text:
+        return f"{label}: {preview_text.strip()}"
+
+    return f"{label}: shell preview unavailable"
+
+
 def qa_is_ready(
     transcript_segment_count: int | None,
     summary_status: str | None,
@@ -124,8 +131,8 @@ def answer_job_question(job: AnalysisJob, question: str) -> QAAnswerShell:
         grounded=True,
         question=normalized_question,
         references=(
-            "Transcript shell",
-            "Summary shell",
-            "Mind map shell",
+            _build_reference("Transcript", job.transcript_preview_text),
+            _build_reference("Summary", job.summary_preview_text),
+            _build_reference("Mind map", job.mindmap_preview_text),
         ),
     )
