@@ -31,7 +31,7 @@ export function AnalyzeForm({
     setFeedback(null);
 
     try {
-      const job = await createJob(inputMode, sourceUrl.trim());
+      const job = await createJob(sourceUrl.trim());
       setFeedback("Analysis requested. Live status will appear below.");
       onJobCreated?.(job);
     } catch (error) {
@@ -53,10 +53,13 @@ export function AnalyzeForm({
         id="source-url"
         name="sourceUrl"
         onChange={(event) => setSourceUrl(event.target.value)}
-        placeholder="Paste a video URL"
+        placeholder={
+          inputMode === "ringcentral_recording"
+            ? "Paste a RingCentral recording URL"
+            : "Paste a public video URL"
+        }
         value={sourceUrl}
       />
-      <input name="inputMode" type="hidden" value={inputMode} />
       <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
         {isSubmitting ? "Analyzing..." : "Analyze"}
       </button>
