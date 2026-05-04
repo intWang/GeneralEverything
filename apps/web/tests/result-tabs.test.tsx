@@ -295,6 +295,17 @@ test("shows a submitting state while a grounded Ask AI question is in flight", a
   expect(
     screen.getByRole("button", { name: "Submitting..." }),
   ).toBeDisabled();
+  expect(
+    screen.getByText(
+      "Submit a question to reserve this panel for the grounded answer shell that a later task will hydrate.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+    ),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText("References")).not.toBeInTheDocument();
 
   resolveQuestion?.({
     answer:

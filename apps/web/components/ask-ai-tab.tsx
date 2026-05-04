@@ -78,19 +78,6 @@ const SHELL_COPY: Record<
   },
 };
 
-function matchesAnswerShell(
-  current: SubmitJobQuestionResponse,
-  next: SubmitJobQuestionResponse,
-) {
-  return (
-    current.answer === next.answer &&
-    current.grounded === next.grounded &&
-    current.job_id === next.job_id &&
-    current.question === next.question &&
-    current.references.join("\n") === next.references.join("\n")
-  );
-}
-
 export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
   const [question, setQuestion] = useState("");
   const [answerShell, setAnswerShell] = useState<SubmitJobQuestionResponse | null>(null);
@@ -125,26 +112,17 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
 
     const nextQuestion = question.trim();
     setSubmitError(null);
+    setAnswerShell(null);
     setIsSubmitting(true);
     const requestId = activeRequestIdRef.current + 1;
     activeRequestIdRef.current = requestId;
-    const optimisticAnswerShell = {
-      answer: `Grounded answer shell for "${nextQuestion}" based on the transcript, summary, and mind map shells currently available.`,
-      grounded: true,
-      job_id: jobId,
-      question: nextQuestion,
-      references: ["Transcript shell", "Summary shell", "Mind map shell"],
-    };
-    setAnswerShell(optimisticAnswerShell);
 
     try {
       const response = await submitJobQuestion(jobId, nextQuestion);
       if (requestId !== activeRequestIdRef.current) {
         return;
       }
-      if (!matchesAnswerShell(optimisticAnswerShell, response)) {
-        setAnswerShell(response);
-      }
+      setAnswerShell(response);
     } catch (error) {
       if (requestId !== activeRequestIdRef.current) {
         return;

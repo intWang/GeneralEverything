@@ -24,19 +24,20 @@ beforeEach(() => {
   vi.mocked(api.listJobs).mockResolvedValue([]);
 });
 
-test("stages a placeholder Ask AI answer from the homepage workspace", async () => {
+test("renders the backend Ask AI response from the homepage workspace after submission resolves", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
   const submitJobQuestion = vi.mocked(api.submitJobQuestion);
+  let resolveQuestion:
+    | ((value: api.SubmitJobQuestionResponse) => void)
+    | undefined;
 
-  submitJobQuestion.mockResolvedValue({
-    answer:
-      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
-    grounded: true,
-    job_id: "55555555-5555-5555-5555-555555555555",
-    question: "What should I review next?",
-    references: buildAskAiMockReferences("homepage.wav"),
-  });
+  submitJobQuestion.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveQuestion = resolve;
+      }),
+  );
 
   window.history.replaceState(
     {},
@@ -87,6 +88,23 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
   expect(
     screen.getByText("Ask AI shell is ready for grounded follow-ups"),
   ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Submitting..." })).toBeDisabled();
+  expect(
+    screen.getByText(
+      "Submit a question to reserve this panel for the grounded answer shell that a later task will hydrate.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("References")).not.toBeInTheDocument();
+
+  resolveQuestion?.({
+    answer:
+      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+    grounded: true,
+    job_id: "55555555-5555-5555-5555-555555555555",
+    question: "What should I review next?",
+    references: buildAskAiMockReferences("homepage.wav"),
+  });
+
   await waitFor(() => {
     expect(
       screen.getByText(
