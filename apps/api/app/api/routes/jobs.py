@@ -7,12 +7,18 @@ from sqlalchemy.orm import Session
 
 from app.db import get_session
 from app.models.job import AnalysisJob, InputMode, JobStatus
-from app.schemas.jobs import CreateJobRequest, JobResponse
+from app.schemas.jobs import (
+    AskJobQuestionRequest,
+    AskJobQuestionResponse,
+    CreateJobRequest,
+    JobResponse,
+)
 from app.services.connectors.public_video import (
     PublicVideoProbeError,
     probe_public_video_metadata,
 )
 from app.services.ingestion import detect_source_type
+from app.services.qa_pipeline import QAAnswerNotReadyError, answer_job_question
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -77,3 +83,28 @@ def get_job(
         raise HTTPException(status_code=404, detail="Job not found")
 
     return job
+
+
+@router.post("/{job_id}/questions", response_model=AskJobQuestionResponse)
+def submit_job_question(
+    job_id: uuid.UUID,
+    payload: AskJobQuestionRequest,
+    session: Session = Depends(get_session),
+) -> AskJobQuestionResponse:
+    job = session.get(AnalysisJob, job_id)
+
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    try:
+        answer_shell = answer_job_question(job, payload.question)
+    except QAAnswerNotReadyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return AskJobQuestionResponse(
+        job_id=job.id,
+        question=answer_shell.question,
+        answer=answer_shell.answer,
+        grounded=answer_shell.grounded,
+        references=list(answer_shell.references),
+    )

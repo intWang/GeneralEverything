@@ -9,6 +9,7 @@ vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
   getJob: vi.fn(),
   listJobs: vi.fn(),
+  submitJobQuestion: vi.fn(),
 }));
 
 vi.mock("../lib/sse", () => ({
@@ -25,6 +26,16 @@ beforeEach(() => {
 test("stages a placeholder Ask AI answer from the homepage workspace", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
+  const submitJobQuestion = vi.mocked(api.submitJobQuestion);
+
+  submitJobQuestion.mockResolvedValue({
+    answer:
+      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+    grounded: true,
+    job_id: "55555555-5555-5555-5555-555555555555",
+    question: "What should I review next?",
+    references: ["Transcript shell", "Summary shell", "Mind map shell"],
+  });
 
   window.history.replaceState(
     {},
@@ -76,8 +87,11 @@ test("stages a placeholder Ask AI answer from the homepage workspace", async () 
     screen.getByText("Ask AI shell is ready for grounded follow-ups"),
   ).toBeInTheDocument();
   expect(
-    screen.getByText('Question staged for the future QA pipeline: "What should I review next?"'),
+    screen.getByText(
+      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+    ),
   ).toBeInTheDocument();
+  expect(screen.getByText("References")).toBeInTheDocument();
 });
 
 test("keeps Ask AI submission blocked while grounding is still stabilizing", async () => {

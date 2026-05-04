@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 import styles from "../app/homepage.module.css";
+import { submitJobQuestion, type SubmitJobQuestionResponse } from "../lib/api";
 
 export type AskAiShellState = "queued" | "processing" | "complete" | "failed";
 
@@ -75,19 +76,28 @@ const SHELL_COPY: Record<
 
 export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
   const [question, setQuestion] = useState("");
-  const [stagedQuestion, setStagedQuestion] = useState<string | null>(null);
+  const [answerShell, setAnswerShell] = useState<SubmitJobQuestionResponse | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const copy = SHELL_COPY[shellState];
   const isReady = shellState === "complete";
-  const canSubmit = copy.canSubmit && question.trim().length > 0;
+  const canSubmit = copy.canSubmit && !!jobId && question.trim().length > 0;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!canSubmit) {
       return;
     }
 
-    setStagedQuestion(question.trim());
+    const nextQuestion = question.trim();
+    setSubmitError(null);
+
+    try {
+      const response = await submitJobQuestion(jobId, nextQuestion);
+      setAnswerShell(response);
+    } catch {
+      setSubmitError("Unable to submit the grounded question right now.");
+    }
   }
 
   return (
@@ -126,11 +136,24 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
       </form>
       <section className={styles.askAiAnswerShell}>
         <h4 className={styles.askAiAnswerTitle}>{copy.answerTitle}</h4>
+        {submitError ? (
+          <p className={styles.formFeedback}>{submitError}</p>
+        ) : null}
         <p className={styles.tabSectionBody}>
-          {stagedQuestion
-            ? `Question staged for the future QA pipeline: "${stagedQuestion}"`
-            : copy.answerBody}
+          {answerShell ? answerShell.answer : copy.answerBody}
         </p>
+        {answerShell?.references.length ? (
+          <div>
+            <h5 className={styles.askAiAnswerTitle}>References</h5>
+            <ul className={styles.tabHintList}>
+              {answerShell.references.map((reference) => (
+                <li className={styles.tabHintItem} key={reference}>
+                  {reference}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
     </div>
   );

@@ -9,6 +9,7 @@ vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
   getJob: vi.fn(),
   listJobs: vi.fn(),
+  submitJobQuestion: vi.fn(),
 }));
 
 vi.mock("../lib/sse", () => ({
@@ -713,6 +714,16 @@ test("hydrates a revisited job from the URL query", async () => {
 test("surfaces the Ask AI ready shell for a completed revisited job", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
+  const submitJobQuestion = vi.mocked(api.submitJobQuestion);
+
+  submitJobQuestion.mockResolvedValue({
+    answer:
+      'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
+    grounded: true,
+    job_id: "44444444-4444-4444-4444-444444444444",
+    question: "What should I follow up on?",
+    references: ["Transcript shell", "Summary shell", "Mind map shell"],
+  });
 
   window.history.replaceState(
     {},
@@ -723,18 +734,24 @@ test("surfaces the Ask AI ready shell for a completed revisited job", async () =
     created_at: "2026-05-04T12:00:00Z",
     id: "44444444-4444-4444-4444-444444444444",
     input_mode: "public_video",
+    mindmap_status: "ready",
     source_url: "https://example.com/completed",
     stage: "building_mindmap",
     status: "completed",
+    summary_status: "ready",
+    transcript_segment_count: 3,
   });
   listJobs.mockResolvedValue([
     {
       created_at: "2026-05-04T12:00:00Z",
       id: "44444444-4444-4444-4444-444444444444",
       input_mode: "public_video",
+      mindmap_status: "ready",
       source_url: "https://example.com/completed",
       stage: "building_mindmap",
       status: "completed",
+      summary_status: "ready",
+      transcript_segment_count: 3,
     },
   ]);
 
@@ -758,30 +775,48 @@ test("surfaces the Ask AI ready shell for a completed revisited job", async () =
     screen.getByText("Grounding source: finalized transcript and summary shells."),
   ).toBeInTheDocument();
   expect(
-    screen.getByText('Question staged for the future QA pipeline: "What should I follow up on?"'),
+    screen.getByText(
+      'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
+    ),
   ).toBeInTheDocument();
 });
 
 test("resets Ask AI draft state when switching between jobs", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
+  const submitJobQuestion = vi.mocked(api.submitJobQuestion);
+
+  submitJobQuestion.mockResolvedValue({
+    answer:
+      'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
+    grounded: true,
+    job_id: "44444444-4444-4444-4444-444444444444",
+    question: "What should I follow up on?",
+    references: ["Transcript shell", "Summary shell", "Mind map shell"],
+  });
 
   listJobs.mockResolvedValue([
     {
       created_at: "2026-05-04T12:00:00Z",
       id: "44444444-4444-4444-4444-444444444444",
       input_mode: "public_video",
+      mindmap_status: "ready",
       source_url: "https://example.com/completed-a",
       stage: "building_mindmap",
       status: "completed",
+      summary_status: "ready",
+      transcript_segment_count: 3,
     },
     {
       created_at: "2026-05-04T12:05:00Z",
       id: "77777777-7777-7777-7777-777777777777",
       input_mode: "public_video",
+      mindmap_status: "ready",
       source_url: "https://example.com/completed-b",
       stage: "building_mindmap",
       status: "completed",
+      summary_status: "ready",
+      transcript_segment_count: 3,
     },
   ]);
   getJob.mockImplementation(async (jobId) => {
@@ -790,9 +825,12 @@ test("resets Ask AI draft state when switching between jobs", async () => {
         created_at: "2026-05-04T12:00:00Z",
         id: jobId,
         input_mode: "public_video",
+        mindmap_status: "ready",
         source_url: "https://example.com/completed-a",
         stage: "building_mindmap",
         status: "completed",
+        summary_status: "ready",
+        transcript_segment_count: 3,
       };
     }
 
@@ -800,9 +838,12 @@ test("resets Ask AI draft state when switching between jobs", async () => {
       created_at: "2026-05-04T12:05:00Z",
       id: jobId,
       input_mode: "public_video",
+      mindmap_status: "ready",
       source_url: "https://example.com/completed-b",
       stage: "building_mindmap",
       status: "completed",
+      summary_status: "ready",
+      transcript_segment_count: 3,
     };
   });
 
@@ -829,7 +870,9 @@ test("resets Ask AI draft state when switching between jobs", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
 
   expect(
-    screen.getByText('Question staged for the future QA pipeline: "What should I follow up on?"'),
+    screen.getByText(
+      'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
+    ),
   ).toBeInTheDocument();
 
   fireEvent.click(
@@ -845,7 +888,9 @@ test("resets Ask AI draft state when switching between jobs", async () => {
   });
 
   expect(
-    screen.queryByText('Question staged for the future QA pipeline: "What should I follow up on?"'),
+    screen.queryByText(
+      'Grounded answer shell for "What should I follow up on?" based on the transcript, summary, and mind map shells currently available.',
+    ),
   ).not.toBeInTheDocument();
   expect(screen.getByLabelText("Ask a question")).toHaveValue("");
   expect(screen.getByText("Answer placeholder")).toBeInTheDocument();

@@ -17,6 +17,18 @@ class QAPipelineShell:
     can_submit: bool
 
 
+@dataclass(frozen=True)
+class QAAnswerShell:
+    answer: str
+    grounded: bool
+    question: str
+    references: tuple[str, ...]
+
+
+class QAAnswerNotReadyError(RuntimeError):
+    pass
+
+
 def qa_is_ready(
     transcript_segment_count: int | None,
     summary_status: str | None,
@@ -92,4 +104,28 @@ def describe_job_qa_shell(job: AnalysisJob) -> QAPipelineShell:
         transcript_segment_count=job.transcript_segment_count,
         summary_status=job.summary_status,
         mindmap_status=job.mindmap_status,
+    )
+
+
+def answer_job_question(job: AnalysisJob, question: str) -> QAAnswerShell:
+    if not qa_is_ready(
+        job.transcript_segment_count,
+        job.summary_status,
+        job.mindmap_status,
+    ):
+        raise QAAnswerNotReadyError("Ask AI is not ready for grounded questions yet")
+
+    normalized_question = question.strip()
+    return QAAnswerShell(
+        answer=(
+            f'Grounded answer shell for "{normalized_question}" based on the '
+            "transcript, summary, and mind map shells currently available."
+        ),
+        grounded=True,
+        question=normalized_question,
+        references=(
+            "Transcript shell",
+            "Summary shell",
+            "Mind map shell",
+        ),
     )

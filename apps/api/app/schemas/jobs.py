@@ -10,6 +10,18 @@ class CreateJobRequest(BaseModel):
     source_url: HttpUrl
 
 
+class AskJobQuestionRequest(BaseModel):
+    question: str
+
+
+class AskJobQuestionResponse(BaseModel):
+    answer: str
+    grounded: bool
+    job_id: uuid.UUID
+    question: str
+    references: list[str]
+
+
 class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

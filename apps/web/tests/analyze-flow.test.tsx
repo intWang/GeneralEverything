@@ -6,6 +6,7 @@ import * as api from "../lib/api";
 
 vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
+  submitJobQuestion: vi.fn(),
 }));
 
 test("submits the source url and reports job creation", async () => {

@@ -9,6 +9,7 @@ vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
   getJob: vi.fn(),
   listJobs: vi.fn(),
+  submitJobQuestion: vi.fn(),
 }));
 
 vi.mock("../lib/sse", () => ({

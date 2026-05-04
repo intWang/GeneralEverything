@@ -1,6 +1,21 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { vi } from "vitest";
 
 import { AITabs } from "../components/ai-tabs";
+import * as api from "../lib/api";
+
+vi.mock("../lib/api", async () => {
+  const actual = await vi.importActual<typeof import("../lib/api")>("../lib/api");
+
+  return {
+    ...actual,
+    submitJobQuestion: vi.fn(),
+  };
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 test("renders the four AI tabs", () => {
   render(<AITabs />);
@@ -59,7 +74,18 @@ test("switches between progressive AI result states", () => {
 });
 
 test("shows complete-style shells for a completed job", () => {
-  render(<AITabs jobStage="building_summary" jobStatus="completed" />);
+  vi.mocked(api.submitJobQuestion).mockResolvedValue({
+    answer:
+      'Grounded answer shell for "What should I review first?" based on the transcript, summary, and mind map shells currently available.',
+    grounded: true,
+    job_id: "completed-job",
+    question: "What should I review first?",
+    references: ["Transcript shell", "Summary shell", "Mind map shell"],
+  });
+
+  render(
+    <AITabs activeJobId="completed-job" jobStage="building_summary" jobStatus="completed" />,
+  );
 
   expect(
     screen.getByText("Summary shell is ready for finalized takeaways"),
@@ -89,7 +115,9 @@ test("shows complete-style shells for a completed job", () => {
     screen.getByText("Grounding source: finalized transcript and summary shells."),
   ).toBeInTheDocument();
   expect(
-    screen.getByText('Question staged for the future QA pipeline: "What should I review first?"'),
+    screen.getByText(
+      'Grounded answer shell for "What should I review first?" based on the transcript, summary, and mind map shells currently available.',
+    ),
   ).toBeInTheDocument();
 });
 
@@ -181,6 +209,48 @@ test("unlocks Ask AI once transcript threshold and stable shells are available",
     screen.getByText("Grounding source: finalized transcript and summary shells."),
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Submit question" })).toBeEnabled();
+});
+
+test("submits a grounded Ask AI question and renders the backend answer shell", async () => {
+  vi.mocked(api.submitJobQuestion).mockResolvedValue({
+    answer:
+      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+    grounded: true,
+    job_id: "job-123",
+    question: "What should I review next?",
+    references: ["Transcript shell", "Summary shell", "Mind map shell"],
+  });
+
+  render(
+    <AITabs
+      activeJobId="job-123"
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapStatus="ready"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "What should I review next?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
+
+  await waitFor(() => {
+    expect(api.submitJobQuestion).toHaveBeenCalledWith(
+      "job-123",
+      "What should I review next?",
+    );
+  });
+  expect(
+    screen.getByText(
+      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByText("References")).toBeInTheDocument();
+  expect(screen.getByText("Transcript shell")).toBeInTheDocument();
 });
 
 test("shows transcript-ready shell details when audio extraction is complete", () => {

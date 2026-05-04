@@ -273,3 +273,99 @@ def test_list_jobs_returns_recent_jobs_first(tmp_path) -> None:
     assert body[0]["description"] == "Description for second"
     assert body[0]["download_status"] is None
     assert body[1]["title"] == "Title for first"
+
+
+def test_submit_job_question_returns_grounded_answer_shell(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        with testing_session() as session:
+            persisted_job = session.query(AnalysisJob).one()
+            persisted_job.stage = "mindmap_generated"
+            persisted_job.status = jobs_routes.JobStatus.RUNNING
+            persisted_job.transcript_segment_count = 3
+            persisted_job.summary_status = "ready"
+            persisted_job.mindmap_status = "ready"
+            session.commit()
+
+        response = client.post(
+            f"/api/jobs/{job_id}/questions",
+            json={"question": "What should I review next?"},
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        app.dependency_overrides.clear()
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body == {
+        "answer": (
+            'Grounded answer shell for "What should I review next?" based on the '
+            "transcript, summary, and mind map shells currently available."
+        ),
+        "grounded": True,
+        "job_id": job_id,
+        "question": "What should I review next?",
+        "references": [
+            "Transcript shell",
+            "Summary shell",
+            "Mind map shell",
+        ],
+    }
+
+
+def test_submit_job_question_rejects_jobs_without_grounded_context(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        with testing_session() as session:
+            persisted_job = session.query(AnalysisJob).one()
+            persisted_job.stage = "summary_generated"
+            persisted_job.status = jobs_routes.JobStatus.RUNNING
+            persisted_job.transcript_segment_count = 2
+            persisted_job.summary_status = "ready"
+            persisted_job.mindmap_status = None
+            session.commit()
+
+        response = client.post(
+            f"/api/jobs/{job_id}/questions",
+            json={"question": "Can I ask yet?"},
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "Ask AI is not ready for grounded questions yet"
+    }

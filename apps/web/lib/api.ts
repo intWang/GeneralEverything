@@ -1,6 +1,13 @@
 import type { JobRecord } from "./types";
 
 export type CreateJobResponse = JobRecord;
+export type SubmitJobQuestionResponse = {
+  answer: string;
+  grounded: boolean;
+  job_id: string;
+  question: string;
+  references: string[];
+};
 
 const DEFAULT_API_BASE_URL = "http://localhost:8000/api";
 
@@ -45,4 +52,12 @@ export function getJob(jobId: string) {
 
 export function listJobs(limit = 8) {
   return readJson<JobRecord[]>(buildApiUrl(`/jobs?limit=${limit}`));
+}
+
+export function submitJobQuestion(jobId: string, question: string) {
+  return readJson<SubmitJobQuestionResponse>(buildApiUrl(`/jobs/${jobId}/questions`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+  });
 }
