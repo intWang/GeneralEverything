@@ -228,6 +228,10 @@ test("hydrates a revisited job from the URL query", async () => {
   expect(
     screen.getByRole("button", { name: /https:\/\/example.com\/revisit/i }),
   ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+  expect(
+    screen.getByText("Transcript is streaming provisional lines"),
+  ).toBeInTheDocument();
 });
 
 test("keeps the created job visible when follow-up hydration fails", async () => {

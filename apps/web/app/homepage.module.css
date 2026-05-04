@@ -49,6 +49,11 @@
   margin-top: 1rem;
 }
 
+.workflowSidebar {
+  display: grid;
+  gap: 1rem;
+}
+
 .workflowPanels {
   display: grid;
   gap: 1rem;
@@ -233,6 +238,13 @@
   color: #0f172a;
   font: inherit;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.tabButton[data-selected="true"] {
+  border-color: #0ea5e9;
+  background: #e0f2fe;
+  color: #0369a1;
 }
 
 .tabPanel {
@@ -241,6 +253,118 @@
   border-radius: 0.75rem;
   background: #f8fafc;
   color: #475569;
+}
+
+.historyList {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historyButton {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  color: #0f172a;
+  font: inherit;
+  text-align: left;
+}
+
+.historyMeta {
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+.tabSectionTitle {
+  margin: 0;
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.tabStateLabel {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0 0.75rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tabStateLabel[data-state="queued"] {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.tabStateLabel[data-state="processing"] {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.tabStateLabel[data-state="partial"] {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.tabStateLabel[data-state="complete"] {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.tabStateLabel[data-state="failed"] {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.tabSectionBody {
+  margin: 0.5rem 0 0;
+  line-height: 1.6;
+}
+
+.tabHintList {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.tabHintItem + .tabHintItem {
+  margin-top: 0.5rem;
+}
+
+.transcriptPreview {
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  background: #ffffff;
+  border: 1px solid #dbeafe;
+}
+
+.transcriptLine {
+  margin: 0;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.transcriptLine + .transcriptLine {
+  margin-top: 0.5rem;
+}
+
+.askAiStatus {
+  margin: 0.75rem 0 0;
+  font-weight: 600;
+  color: #92400e;
+}
+
+.askAiStatus[data-ready="true"] {
+  color: #166534;
 }
 
 @media (min-width: 60rem) {

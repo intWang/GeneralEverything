@@ -15,6 +15,7 @@ export function AnalyzeForm({
   inputMode,
   onJobCreated,
 }: AnalyzeFormProps) {
+  const isRingCentralMode = inputMode === "ringcentral_recording";
   const [sourceUrl, setSourceUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -45,11 +46,14 @@ export function AnalyzeForm({
 
   return (
     <form className={styles.formCard} onSubmit={handleSubmit}>
-      {inputMode === "ringcentral_recording" ? (
+      {isRingCentralMode ? (
         <div className={styles.modeNotice}>
           <p className={styles.modeNoticeTitle}>RingCentral workspace</p>
           <p className={styles.modeNoticeBody}>
             RingCentral connection will be added in a later task.
+          </p>
+          <p className={styles.modeNoticeBody}>
+            RingCentral authentication is required before analysis can start.
           </p>
           <button
             className={styles.secondaryButton}
@@ -69,14 +73,27 @@ export function AnalyzeForm({
         name="sourceUrl"
         onChange={(event) => setSourceUrl(event.target.value)}
         placeholder={
-          inputMode === "ringcentral_recording"
+          isRingCentralMode
             ? "Paste a RingCentral recording URL"
             : "Paste a public video URL"
         }
         value={sourceUrl}
       />
-      <button className={styles.primaryButton} disabled={isSubmitting} type="submit">
-        {isSubmitting ? "Analyzing..." : "Analyze"}
+      <button
+        aria-label={
+          isRingCentralMode
+            ? "Analyze (blocked until RingCentral auth is available)"
+            : "Analyze"
+        }
+        className={styles.primaryButton}
+        disabled={isSubmitting || isRingCentralMode}
+        type="submit"
+      >
+        {isRingCentralMode
+          ? "Analyze"
+          : isSubmitting
+            ? "Analyzing..."
+            : "Analyze"}
       </button>
       {feedback ? (
         <p aria-live="polite" className={styles.formFeedback}>
