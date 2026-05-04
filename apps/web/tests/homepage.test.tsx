@@ -416,6 +416,173 @@ test("ignores out-of-order status events for the same active job when refresh fa
   ).not.toBeInTheDocument();
 });
 
+test("prefers completed over failed for same-stage terminal events", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=92929292-9292-9292-9292-929292929292",
+  );
+  getJob
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T16:25:00Z",
+      id: "92929292-9292-9292-9292-929292929292",
+      input_mode: "public_video",
+      source_url: "https://example.com/terminal-order",
+      stage: "mindmap_generated",
+      status: "completed",
+      title: "Completed terminal state",
+    })
+    .mockRejectedValueOnce(new Error("late failed refresh"));
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:25:00Z",
+      id: "92929292-9292-9292-9292-929292929292",
+      input_mode: "public_video",
+      source_url: "https://example.com/terminal-order",
+      stage: "mindmap_generated",
+      status: "completed",
+      title: "Completed terminal state",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 92929292-9292-9292-9292-929292929292 is completed for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  handlers?.onEvent?.({
+    event: "job.status",
+    data: {
+      job_id: "92929292-9292-9292-9292-929292929292",
+      stage: "mindmap_generated",
+      status: "failed",
+    },
+  });
+
+  await waitFor(() => {
+    expect(getJob).toHaveBeenCalledTimes(2);
+  });
+
+  expect(
+    screen.getByText(
+      "Job 92929292-9292-9292-9292-929292929292 is completed for analysis.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      "Job 92929292-9292-9292-9292-929292929292 is failed for analysis.",
+    ),
+  ).not.toBeInTheDocument();
+});
+
+test("preserves newer fields when a stale successful refresh loses to current state", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=93939393-9393-9393-9393-939393939393",
+  );
+  getJob
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T16:30:00Z",
+      id: "93939393-9393-9393-9393-939393939393",
+      input_mode: "public_video",
+      source_url: "https://example.com/stale-success",
+      stage: "summary_generated",
+      status: "running",
+      summary_key_points_count: 2,
+      summary_preview_text: "Newest summary preview should survive.",
+      summary_status: "ready",
+      title: "Newest hydrated title",
+    })
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T16:30:00Z",
+      id: "93939393-9393-9393-9393-939393939393",
+      input_mode: "public_video",
+      source_url: "https://example.com/stale-success",
+      stage: "queued",
+      status: "running",
+      summary_key_points_count: null,
+      summary_preview_text: null,
+      summary_status: null,
+      title: null,
+    });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:30:00Z",
+      id: "93939393-9393-9393-9393-939393939393",
+      input_mode: "public_video",
+      source_url: "https://example.com/stale-success",
+      stage: "summary_generated",
+      status: "running",
+      summary_key_points_count: 2,
+      summary_preview_text: "Newest summary preview should survive.",
+      summary_status: "ready",
+      title: "Newest hydrated title",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByText("Newest hydrated title")).toBeInTheDocument();
+  });
+
+  handlers?.onEvent?.({
+    event: "job.status",
+    data: {
+      job_id: "93939393-9393-9393-9393-939393939393",
+      stage: "queued",
+      status: "running",
+    },
+  });
+
+  await waitFor(() => {
+    expect(getJob).toHaveBeenCalledTimes(2);
+  });
+
+  expect(screen.getByText("Newest hydrated title")).toBeInTheDocument();
+  expect(screen.getByText("Key point shells ready: 2")).toBeInTheDocument();
+  expect(
+    screen.getByText("Preview: Newest summary preview should survive."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Job 93939393-9393-9393-9393-939393939393 generated a summary shell preview.",
+    ),
+  ).toBeInTheDocument();
+});
+
 test("refreshes the active job snapshot when a qa.ready event arrives", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
@@ -1258,7 +1425,7 @@ test("ignores stale hydration responses when a newer history selection resolves 
   ).not.toBeInTheDocument();
 });
 
-test("ignores stale status events and stale refreshes after switching jobs", async () => {
+test("makes a history selection active immediately before hydration resolves", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
   const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
@@ -1268,7 +1435,7 @@ test("ignores stale status events and stale refreshes after switching jobs", asy
       onEvent?: (event: { data: unknown; event: string }) => void;
     }
   >();
-  let resolveStaleRefresh:
+  let resolveSecondHydration:
     | ((value: Awaited<ReturnType<typeof api.getJob>>) => void)
     | undefined;
 
@@ -1289,36 +1456,24 @@ test("ignores stale status events and stale refreshes after switching jobs", asy
       source_url: "https://example.com/second",
       stage: "queued",
       status: "queued",
-      title: "Second job",
+      title: "Second history snapshot",
     },
   ]);
   getJob.mockImplementation((jobId) => {
     if (jobId === "11111111-1111-1111-1111-111111111111") {
-      if (!handlersByJobId.has(jobId)) {
-        return Promise.resolve({
-          created_at: "2026-05-04T09:00:00Z",
-          id: jobId,
-          input_mode: "public_video",
-          source_url: "https://example.com/first",
-          stage: "queued",
-          status: "queued",
-          title: "First hydrated job",
-        });
-      }
-
-      return new Promise((resolve) => {
-        resolveStaleRefresh = resolve;
+      return Promise.resolve({
+        created_at: "2026-05-04T09:00:00Z",
+        id: jobId,
+        input_mode: "public_video",
+        source_url: "https://example.com/first",
+        stage: "queued",
+        status: "queued",
+        title: "First hydrated job",
       });
     }
 
-    return Promise.resolve({
-      created_at: "2026-05-04T10:00:00Z",
-      id: jobId,
-      input_mode: "public_video",
-      source_url: "https://example.com/second",
-      stage: "queued",
-      status: "queued",
-      title: "Second hydrated job",
+    return new Promise((resolve) => {
+      resolveSecondHydration = resolve;
     });
   });
   subscribeToJobEvents.mockImplementation((jobId, handlers = {}) => {
@@ -1342,9 +1497,10 @@ test("ignores stale status events and stale refreshes after switching jobs", asy
     screen.getByRole("button", { name: /https:\/\/example.com\/second/i }),
   );
 
-  await waitFor(() => {
-    expect(screen.getByText("Second hydrated job")).toBeInTheDocument();
-  });
+  expect(
+    screen.getByText("Job 22222222-2222-2222-2222-222222222222 is queued for analysis."),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Second history snapshot")).toBeInTheDocument();
 
   handlersByJobId.get("11111111-1111-1111-1111-111111111111")?.onEvent?.({
     event: "job.status",
@@ -1360,22 +1516,23 @@ test("ignores stale status events and stale refreshes after switching jobs", asy
       "Job 22222222-2222-2222-2222-222222222222 is queued for analysis.",
     ),
   ).toBeInTheDocument();
+  expect(getJob).toHaveBeenCalledTimes(2);
 
-  resolveStaleRefresh?.({
-    created_at: "2026-05-04T09:00:00Z",
-    id: "11111111-1111-1111-1111-111111111111",
-    input_mode: "ringcentral_recording",
-    source_url: "https://example.com/first",
-    stage: "summary_generated",
-    status: "completed",
-    title: "Stale first refresh",
+  resolveSecondHydration?.({
+    created_at: "2026-05-04T10:00:00Z",
+    id: "22222222-2222-2222-2222-222222222222",
+    input_mode: "public_video",
+    source_url: "https://example.com/second",
+    stage: "queued",
+    status: "queued",
+    title: "Second hydrated job",
   });
 
   await waitFor(() => {
     expect(screen.getByText("Second hydrated job")).toBeInTheDocument();
   });
 
-  expect(screen.queryByText("Stale first refresh")).not.toBeInTheDocument();
+  expect(screen.queryByText("First hydrated job")).not.toBeInTheDocument();
   expect(
     screen.queryByText(
       "Job 22222222-2222-2222-2222-222222222222 is completed for analysis.",

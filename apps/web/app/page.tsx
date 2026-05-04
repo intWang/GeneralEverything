@@ -20,7 +20,8 @@ const STATUS_RANK: Record<JobRecord["status"], number> = {
   queued: 0,
   running: 1,
   failed: 2,
-  completed: 2,
+  // Prefer success over failure for same-stage terminal reordering.
+  completed: 3,
 };
 const STAGE_ORDER = [
   "queued",
@@ -169,12 +170,14 @@ function mergeJobSnapshot(currentJob: JobRecord | null, nextJob: JobRecord) {
   ) {
     return {
       ...nextJob,
-      stage: currentJob.stage,
-      status: currentJob.status,
+      ...currentJob,
     };
   }
 
-  return nextJob;
+  return {
+    ...currentJob,
+    ...nextJob,
+  };
 }
 
 function mergeJobStatusUpdate(
@@ -408,7 +411,12 @@ export default function HomePage() {
   }
 
   function handleHistorySelection(jobId: string) {
-    void hydrateJob(jobId, { syncUrlMode: "push" });
+    const fallbackJob = jobHistory.find((job) => job.id === jobId);
+
+    void hydrateJob(jobId, {
+      fallbackJob,
+      syncUrlMode: "push",
+    });
   }
 
   return (
