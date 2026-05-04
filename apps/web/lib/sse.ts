@@ -13,7 +13,12 @@ type JobEventHandlers = {
   onOpen?: () => void;
 };
 
-const DEFAULT_EVENT_NAMES = ["job.status", "qa.ready"] as const;
+const DEFAULT_EVENT_NAMES = [
+  "job.status",
+  "qa.ready",
+  "transcript.segment",
+  "summary.partial",
+] as const;
 
 function parseEventData(data: string) {
   try {

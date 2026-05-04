@@ -51,7 +51,7 @@ test("smoke: homepage opens the Ask AI shell for a completed job", async () => {
 
   expect(
     screen.getByRole("heading", {
-      name: "Turn recordings into transcripts, summaries, and answers.",
+      name: "Paste a video URL. Get transcript, summary, and answers.",
     }),
   ).toBeInTheDocument();
 

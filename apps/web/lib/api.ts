@@ -8,6 +8,13 @@ export type SubmitJobQuestionResponse = {
   question: string;
   references: string[];
 };
+export type TranslateJobContentResponse = {
+  content_type: "summary" | "transcript";
+  job_id: string;
+  source_language_code: string;
+  target_language_code: string;
+  translated_text: string;
+};
 
 export class ApiError extends Error {
   detail?: string;
@@ -79,5 +86,20 @@ export function submitJobQuestion(jobId: string, question: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question }),
+  });
+}
+
+export function translateJobContent(
+  jobId: string,
+  contentType: "summary" | "transcript",
+  targetLanguageCode: string,
+) {
+  return readJson<TranslateJobContentResponse>(buildApiUrl(`/jobs/${jobId}/translations`), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content_type: contentType,
+      target_language_code: targetLanguageCode,
+    }),
   });
 }

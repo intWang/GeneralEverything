@@ -22,6 +22,19 @@ class AskJobQuestionResponse(BaseModel):
     references: list[str]
 
 
+class TranslateJobContentRequest(BaseModel):
+    content_type: str
+    target_language_code: str
+
+
+class TranslateJobContentResponse(BaseModel):
+    content_type: str
+    job_id: uuid.UUID
+    source_language_code: str
+    target_language_code: str
+    translated_text: str
+
+
 class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -41,10 +54,17 @@ class JobResponse(BaseModel):
     transcript_status: str | None
     transcript_extractor: str | None
     transcript_audio_artifact_path: str | None
+    detected_language_code: str | None
+    detected_language_name: str | None
     transcript_preview_text: str | None
+    transcript_source_text: str | None
+    transcript_translations: dict[str, str] | None = None
     transcript_segment_count: int | None
     summary_status: str | None
     summary_preview_text: str | None
+    summary_source_text: str | None
+    summary_source_bullets: list[str] | None = None
+    summary_translations: dict[str, str] | None = None
     summary_key_points_count: int | None
     mindmap_status: str | None
     mindmap_preview_text: str | None

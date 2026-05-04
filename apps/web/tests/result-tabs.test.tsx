@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { vi } from "vitest";
 
 import { buildAskAiMockReferences } from "./ask-ai-test-helpers";
@@ -11,6 +12,7 @@ vi.mock("../lib/api", async () => {
   return {
     ...actual,
     submitJobQuestion: vi.fn(),
+    translateJobContent: vi.fn(),
   };
 });
 
@@ -40,6 +42,242 @@ test("shows the progressive summary state by default", () => {
   ).toBeInTheDocument();
 });
 
+test("shows a live summary warmup state before the first transcript segments arrive", () => {
+  render(
+    <AITabs
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptPreviewText="Preparing the speech model. First transcript lines may take a moment."
+      transcriptSegmentCount={0}
+      transcriptStatus="processing"
+    />,
+  );
+
+  expect(screen.getByText("Processing")).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: /Summary/i })).toHaveTextContent("Live");
+  expect(
+    screen.getByText("Summary is waiting for the first transcript segments"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Once the first stable transcript lines land, the live summary draft will start tightening instead of leaving this panel blank.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Live progress")).toBeInTheDocument();
+  expect(
+    screen.getByText("Waiting for the first transcript segments"),
+  ).toBeInTheDocument();
+});
+
+test("builds a provisional summary once enough transcript segments have arrived", () => {
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={4}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。"
+      }
+    />,
+  );
+
+  expect(screen.getByText("Live summary draft")).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: /Summary/i })).toHaveTextContent("Live");
+  expect(
+    screen.getByText("Summary is tightening as transcript lines arrive"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "This early draft refreshes while transcript coverage grows, then hands off to the finalized backend summary.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Based on 4 transcript segments captured so far."),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Updated just now")).toBeInTheDocument();
+  expect(
+    screen.getByText("目前已经稳定识别到这些早期要点：我们确认了产品发布时间；下周将进行团队培训。"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("我们确认了产品发布时间")).toBeInTheDocument();
+  expect(screen.getByText("下周将进行团队培训")).toBeInTheDocument();
+});
+
+test("replaces the provisional summary with the finalized backend summary when it arrives", () => {
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={4}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。"
+      }
+    />,
+  );
+
+  expect(screen.getByText("Live summary draft")).toBeInTheDocument();
+
+  rerender(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="summary_generated"
+      jobStatus="running"
+      summaryKeyPointsCount={2}
+      summarySourceBullets={["产品发布时间已确认", "下周将进行团队培训"]}
+      summarySourceText="录音确认了产品发布时间，并安排了团队培训。"
+      summaryStatus="ready"
+      transcriptSegmentCount={6}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。"
+      }
+    />,
+  );
+
+  expect(screen.getByText("Source summary")).toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: /Summary/i })).not.toHaveTextContent("Live");
+  expect(
+    screen.getByText("Summary in the detected audio language"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("录音确认了产品发布时间，并安排了团队培训。"),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Live summary draft")).not.toBeInTheDocument();
+});
+
+test("refreshes the provisional summary metadata as transcript coverage grows", () => {
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={4}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。"
+      }
+    />,
+  );
+
+  expect(
+    screen.getByText("Based on 4 transcript segments captured so far."),
+  ).toBeInTheDocument();
+
+  rerender(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={7}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。\n客服团队会继续跟进。"
+      }
+    />,
+  );
+
+  expect(
+    screen.getByText("Based on 7 transcript segments captured so far."),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Updated just now")).toBeInTheDocument();
+});
+
+test("pulses the Summary live badge when early summary updates arrive off-tab", () => {
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={4}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。"
+      }
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  rerender(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={7}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。\n客服团队会继续跟进。"
+      }
+    />,
+  );
+
+  expect(screen.getByText("Live")).toHaveAttribute("data-pulse", "true");
+});
+
+test("keeps the Summary live badge steady while the Summary tab is open", () => {
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={4}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。"
+      }
+    />,
+  );
+
+  expect(screen.getByRole("tab", { name: /Summary/i })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+
+  rerender(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={7}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。\n客服团队会继续跟进。"
+      }
+    />,
+  );
+
+  expect(screen.getByText("Live")).toHaveAttribute("data-pulse", "false");
+});
+
+test("briefly highlights the newest provisional summary bullets", () => {
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={4}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。"
+      }
+    />,
+  );
+
+  rerender(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={7}
+      transcriptSourceText={
+        "我们确认了产品发布时间。\n下周将进行团队培训。\n销售团队会同步客户名单。\n客服团队会继续跟进。"
+      }
+    />,
+  );
+
+  expect(screen.getByText("下周将进行团队培训")).toHaveAttribute(
+    "data-recent",
+    "true",
+  );
+  expect(screen.getByText("销售团队会同步客户名单")).toHaveAttribute(
+    "data-recent",
+    "true",
+  );
+});
+
 test("switches between progressive AI result states", () => {
   render(<AITabs jobStage="generating_transcript" jobStatus="running" />);
 
@@ -50,9 +288,9 @@ test("switches between progressive AI result states", () => {
 
   fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
   expect(
-    screen.getByText("Transcript is streaming provisional lines"),
+    screen.getByText("Transcript is streaming live lines"),
   ).toBeInTheDocument();
-  expect(screen.getByText("Partial")).toBeInTheDocument();
+  expect(screen.getByText("Streaming")).toBeInTheDocument();
 
   fireEvent.click(screen.getByRole("tab", { name: "Mind Map" }));
   expect(
@@ -72,6 +310,168 @@ test("switches between progressive AI result states", () => {
     ),
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Submit question" })).toBeDisabled();
+});
+
+test("shows a clearer warm-up message before the first transcript segment arrives", () => {
+  render(
+    <AITabs
+      jobStage="transcript_ready"
+      jobStatus="running"
+      transcriptAudioArtifactPath="var/transcripts/public-video/demo.wav"
+      transcriptExtractor="ffmpeg"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(
+    screen.getByText("Transcript is decoding the first lines"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Audio has been extracted and the model is working through the first chunk. On longer videos, the first stable lines can take 30 to 90 seconds to appear.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Waiting for the first transcript segment"),
+  ).toBeInTheDocument();
+});
+
+test("shows a live segment counter while transcript lines are streaming", () => {
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={6}
+      transcriptSourceText="第一行字幕\n第二行字幕"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(screen.getByText("Streaming transcript")).toBeInTheDocument();
+  expect(
+    screen.getByText("6 transcript segments captured so far"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Live progress")).toBeInTheDocument();
+});
+
+test("auto-scrolls transcript view when new streaming lines arrive", () => {
+  const scrollIntoView = vi.fn();
+
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scrollIntoView,
+  });
+
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={1}
+      transcriptSourceText="第一行字幕"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  rerender(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={2}
+      transcriptSourceText={"第一行字幕\n第二行字幕"}
+    />,
+  );
+
+  expect(scrollIntoView).toHaveBeenCalled();
+});
+
+test("pauses auto-scroll when the reader scrolls upward and lets them jump to latest", () => {
+  const scrollIntoView = vi.fn();
+
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scrollIntoView,
+  });
+
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={2}
+      transcriptSourceText={"第一行字幕\n第二行字幕"}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  const transcriptViewport = screen.getByText("第一行字幕").parentElement as HTMLElement;
+  Object.defineProperty(transcriptViewport, "scrollHeight", {
+    configurable: true,
+    value: 400,
+  });
+  Object.defineProperty(transcriptViewport, "clientHeight", {
+    configurable: true,
+    value: 120,
+  });
+  Object.defineProperty(transcriptViewport, "scrollTop", {
+    configurable: true,
+    value: 120,
+    writable: true,
+  });
+
+  fireEvent.scroll(transcriptViewport);
+
+  rerender(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={3}
+      transcriptSourceText={"第一行字幕\n第二行字幕\n第三行字幕"}
+    />,
+  );
+
+  expect(
+    screen.getByText("Auto-scroll paused while you read earlier transcript lines."),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Jump to latest" })).toBeInTheDocument();
+
+  scrollIntoView.mockClear();
+  fireEvent.click(screen.getByRole("button", { name: "Jump to latest" }));
+  expect(scrollIntoView).toHaveBeenCalled();
+});
+
+test("briefly highlights the newest streaming transcript lines", () => {
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={1}
+      transcriptSourceText="第一行字幕"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  rerender(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={3}
+      transcriptSourceText={"第一行字幕\n第二行字幕\n第三行字幕"}
+    />,
+  );
+
+  expect(screen.getByText("第二行字幕")).toHaveAttribute("data-recent", "true");
+  expect(screen.getByText("第三行字幕")).toHaveAttribute("data-recent", "true");
 });
 
 test("shows complete-style shells for a completed job", () => {
@@ -551,7 +951,7 @@ test("shows transcript-ready shell details when audio extraction is complete", (
   fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
 
   expect(
-    screen.getByText("Transcript is preparing its first lines"),
+    screen.getByText("Transcript is decoding the first lines"),
   ).toBeInTheDocument();
   expect(
     screen.getByText(
@@ -579,7 +979,7 @@ test("shows transcript-generated shell preview details", () => {
   fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
 
   expect(
-    screen.getByText("Transcript is streaming provisional lines"),
+    screen.getByText("Transcript is streaming live lines"),
   ).toBeInTheDocument();
   expect(
     screen.getByText("A transcript shell preview is now available from the backend pipeline."),
@@ -612,4 +1012,126 @@ test("shows summary-generated shell preview details", () => {
   expect(
     screen.getByText("Preview: Summary shell generated from transcript preview."),
   ).toBeInTheDocument();
+});
+
+test("shows source-language transcript and summary content by default", () => {
+  render(
+    <AITabs
+      {...({
+        activeJobId: "job-zh",
+        detectedLanguageName: "Chinese",
+        jobStatus: "completed",
+        summarySourceBullets: [
+          "产品发布时间已确认在下周",
+          "客户成功团队将在周四前完成培训材料准备",
+        ],
+        summarySourceText: "录音确认了产品发布时间，并安排了培训准备。",
+        transcriptSourceText: "大家好，欢迎来到今天的会议。",
+      } as unknown as ComponentProps<typeof AITabs>)}
+    />,
+  );
+
+  expect(
+    screen.getByText("录音确认了产品发布时间，并安排了培训准备。"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Decisions")).toBeInTheDocument();
+  expect(screen.getByText("Actions")).toBeInTheDocument();
+  expect(screen.getByText("产品发布时间已确认在下周")).toBeInTheDocument();
+  expect(
+    screen.getByText("客户成功团队将在周四前完成培训材料准备"),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(screen.getByText("Detected language: Chinese")).toBeInTheDocument();
+  expect(screen.getByText("大家好，欢迎来到今天的会议。")).toBeInTheDocument();
+});
+
+test("translates summary and transcript on demand", async () => {
+  vi.mocked(api.translateJobContent).mockImplementation(async (jobId, contentType, languageCode) => {
+    expect(jobId).toBe("job-zh");
+
+    if (contentType === "summary") {
+      expect(languageCode).toBe("en");
+      return {
+        content_type: "summary",
+        job_id: jobId,
+        source_language_code: "zh",
+        target_language_code: "en",
+        translated_text: "The meeting confirmed the release date.",
+      };
+    }
+
+    expect(languageCode).toBe("en");
+    return {
+      content_type: "transcript",
+      job_id: jobId,
+      source_language_code: "zh",
+      target_language_code: "en",
+      translated_text: "Hello everyone, welcome to today's meeting.",
+    };
+  });
+
+  render(
+    <AITabs
+      activeJobId="job-zh"
+      detectedLanguageName="Chinese"
+      jobStatus="completed"
+      summarySourceText="会议确定了发布时间。"
+      transcriptSourceText="大家好，欢迎来到今天的会议。"
+    />,
+  );
+
+  fireEvent.change(screen.getByLabelText("Summary language"), {
+    target: { value: "en" },
+  });
+
+  expect(screen.getByText("Current language: English")).toBeInTheDocument();
+
+  await waitFor(() => {
+    expect(screen.getByText("The meeting confirmed the release date.")).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+  fireEvent.change(screen.getByLabelText("Transcript language"), {
+    target: { value: "en" },
+  });
+
+  await waitFor(() => {
+    expect(
+      screen.getByText("Hello everyone, welcome to today's meeting."),
+    ).toBeInTheDocument();
+  });
+  expect(screen.getByText("Current language: English")).toBeInTheDocument();
+});
+
+test("uses cached translations after hydration without re-requesting them", async () => {
+  render(
+    <AITabs
+      activeJobId="job-zh"
+      detectedLanguageName="Chinese"
+      jobStatus="completed"
+      summarySourceText="会议确定了发布时间。"
+      summaryTranslations={{ en: "The meeting confirmed the release date." }}
+      transcriptSourceText="大家好，欢迎来到今天的会议。"
+      transcriptTranslations={{ en: "Hello everyone, welcome to today's meeting." }}
+    />,
+  );
+
+  fireEvent.change(screen.getByLabelText("Summary language"), {
+    target: { value: "en" },
+  });
+
+  expect(screen.getByText("The meeting confirmed the release date.")).toBeInTheDocument();
+  expect(api.translateJobContent).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+  fireEvent.change(screen.getByLabelText("Transcript language"), {
+    target: { value: "en" },
+  });
+
+  expect(
+    screen.getByText("Hello everyone, welcome to today's meeting."),
+  ).toBeInTheDocument();
+  expect(api.translateJobContent).not.toHaveBeenCalled();
 });

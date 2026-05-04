@@ -2,6 +2,7 @@ import json
 import subprocess
 
 from app.schemas.video_metadata import VideoMetadata
+from app.services.downloads.public_video import _resolve_yt_dlp_command
 
 
 class PublicVideoProbeError(RuntimeError):
@@ -23,7 +24,7 @@ def normalize_yt_dlp_metadata(payload: dict) -> VideoMetadata:
 
 def build_yt_dlp_probe_command(source_url: str) -> list[str]:
     return [
-        "yt-dlp",
+        *_resolve_yt_dlp_command(),
         "--dump-single-json",
         "--skip-download",
         source_url,

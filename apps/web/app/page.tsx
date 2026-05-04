@@ -68,7 +68,7 @@ function buildTimelineItems(jobState: JobRecord) {
           ? "error"
           : "pending";
   const aiState =
-    jobState.stage === "transcript_ready"
+    jobState.stage === "transcript_ready" || jobState.stage === "generating_transcript"
       ? "active"
       : jobState.status === "completed"
       ? "complete"
@@ -89,6 +89,8 @@ function buildTimelineItems(jobState: JobRecord) {
       "The download shell has been prepared and the job is ready for the next media-processing step.",
     transcript_ready:
       "Audio extraction is complete and the transcript shell is ready to hand off into speech recognition.",
+    generating_transcript:
+      "Audio has been extracted and the model is decoding the first transcript lines. Long recordings can take a little time before the first stable segment appears.",
     transcript_generated:
       "A lightweight transcript shell has been generated and persisted, so downstream summary stages can start from real transcript context.",
     summary_generated:
@@ -104,6 +106,7 @@ function buildTimelineItems(jobState: JobRecord) {
     downloading: `Job ${jobState.id} is progressing through the download shell.`,
     download_ready: `Job ${jobState.id} is ready for the download step.`,
     transcript_ready: `Job ${jobState.id} is ready for transcript generation.`,
+    generating_transcript: `Job ${jobState.id} is decoding the first transcript lines.`,
     transcript_generated: `Job ${jobState.id} generated a transcript shell preview.`,
     summary_generated: `Job ${jobState.id} generated a summary shell preview.`,
     mindmap_generated: `Job ${jobState.id} generated a mind map shell preview.`,
@@ -140,6 +143,10 @@ function buildTimelineItems(jobState: JobRecord) {
       detail:
         jobState.stage === "transcript_ready"
           ? "Audio is extracted and the transcript shell is now ready for the next speech-recognition step."
+          : jobState.stage === "generating_transcript"
+          ? jobState.transcript_segment_count && jobState.transcript_segment_count > 0
+            ? `Transcript streaming has started. ${jobState.transcript_segment_count} segments are already available while summary and Ask AI continue waiting for more stable context.`
+            : "Audio has been extracted and decoding is underway. The first transcript lines may take 30 to 90 seconds on longer videos."
           : jobState.stage === "transcript_generated"
           ? "A first transcript shell preview is available, while richer transcript generation and downstream summary stages remain in progress."
           : jobState.stage === "summary_generated"
@@ -201,6 +208,7 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const activeJobIdRef = useRef<string | null>(jobState?.id ?? null);
   const hydrationRequestIdRef = useRef(0);
+  const resultsSectionRef = useRef<HTMLElement | null>(null);
 
   activeJobIdRef.current = jobState?.id ?? null;
 
@@ -355,6 +363,105 @@ export default function HomePage() {
           return;
         }
 
+        if (event.event === "transcript.segment") {
+          const payload = event.data;
+          if (
+            !payload ||
+            typeof payload !== "object" ||
+            !("transcript" in payload) ||
+            typeof payload.transcript !== "object" ||
+            payload.transcript === null
+          ) {
+            return;
+          }
+
+          const transcriptPayload = payload.transcript as Record<string, unknown>;
+          setJobState((currentState) => {
+            if (currentState?.id !== activeJobId) {
+              return currentState;
+            }
+
+            return mergeJobSnapshot(currentState, {
+              ...currentState,
+              detected_language_code:
+                typeof transcriptPayload.detected_language_code === "string"
+                  ? transcriptPayload.detected_language_code
+                  : currentState.detected_language_code,
+              detected_language_name:
+                typeof transcriptPayload.detected_language_name === "string"
+                  ? transcriptPayload.detected_language_name
+                  : currentState.detected_language_name,
+              stage: "generating_transcript",
+              status: "running",
+              transcript_preview_text:
+                typeof transcriptPayload.preview_text === "string"
+                  ? transcriptPayload.preview_text
+                  : currentState.transcript_preview_text,
+              transcript_segment_count:
+                typeof transcriptPayload.segment_count === "number"
+                  ? transcriptPayload.segment_count
+                  : currentState.transcript_segment_count,
+              transcript_source_text:
+                typeof transcriptPayload.source_text === "string"
+                  ? transcriptPayload.source_text
+                  : currentState.transcript_source_text,
+              transcript_status: "processing",
+            });
+          });
+          return;
+        }
+
+        if (event.event === "summary.partial") {
+          const payload = event.data;
+          if (
+            !payload ||
+            typeof payload !== "object" ||
+            !("summary" in payload) ||
+            typeof payload.summary !== "object" ||
+            payload.summary === null
+          ) {
+            return;
+          }
+
+          const summaryPayload = payload.summary as Record<string, unknown>;
+          setJobState((currentState) => {
+            if (currentState?.id !== activeJobId) {
+              return currentState;
+            }
+
+            return mergeJobSnapshot(currentState, {
+              ...currentState,
+              stage:
+                typeof summaryPayload.stage === "string"
+                  ? (summaryPayload.stage as JobRecord["stage"])
+                  : currentState.stage,
+              status: "running",
+              summary_key_points_count:
+                typeof summaryPayload.key_points_count === "number"
+                  ? summaryPayload.key_points_count
+                  : currentState.summary_key_points_count,
+              summary_preview_text:
+                typeof summaryPayload.preview_text === "string"
+                  ? summaryPayload.preview_text
+                  : currentState.summary_preview_text,
+              summary_source_bullets: Array.isArray(summaryPayload.source_bullets)
+                ? (summaryPayload.source_bullets.filter(
+                    (item): item is string => typeof item === "string",
+                  ) as string[])
+                : currentState.summary_source_bullets,
+              summary_source_text:
+                typeof summaryPayload.source_text === "string"
+                  ? summaryPayload.source_text
+                  : currentState.summary_source_text,
+              summary_status:
+                typeof summaryPayload.status === "string"
+                  ? summaryPayload.status
+                  : "processing",
+            });
+          });
+          return;
+        }
+
         if (event.event !== "job.status") {
           return;
         }
@@ -397,10 +504,41 @@ export default function HomePage() {
     });
   }, [jobState?.id]);
 
+  useEffect(() => {
+    if (!jobState?.id || !["queued", "running"].includes(jobState.status)) {
+      return;
+    }
+
+    const activeJobId = jobState.id;
+    const intervalId = window.setInterval(() => {
+      void getJob(activeJobId)
+        .then((job) => {
+          if (activeJobIdRef.current !== activeJobId) {
+            return;
+          }
+
+          setJobState((currentState) =>
+            currentState?.id === activeJobId
+              ? mergeJobSnapshot(currentState, job)
+              : currentState,
+          );
+        })
+        .catch(() => undefined);
+    }, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [jobState?.id, jobState?.status]);
+
   function handleJobCreated(job: CreateJobResponse) {
     syncJobUrl(job.id, "replace");
     setJobState(job);
     setInputMode(job.input_mode);
+    resultsSectionRef.current?.scrollIntoView?.({
+      behavior: "smooth",
+      block: "start",
+    });
     void Promise.all([
       refreshHistory(),
       hydrateJob(job.id, {
@@ -419,6 +557,43 @@ export default function HomePage() {
     });
   }
 
+  const recentJobsPanel = (
+    <section
+      aria-label="Recent jobs"
+      className={`${styles.panel} ${styles.recentJobsPanel}`}
+    >
+      <h2 className={styles.panelTitle}>Recent jobs</h2>
+      {jobHistory.length > 0 ? (
+        <ul className={styles.historyList}>
+          {jobHistory.map((job) => (
+            <li key={job.id}>
+              <button
+                aria-pressed={jobState?.id === job.id}
+                className={styles.historyButton}
+                onClick={() => handleHistorySelection(job.id)}
+                type="button"
+              >
+                <span>{job.source_url}</span>
+                {job.title ? (
+                  <span className={styles.historyMeta}>
+                    Title: {job.title}
+                  </span>
+                ) : null}
+                <span className={styles.historyMeta}>
+                  {job.status} • {job.stage}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.workspaceDescription}>
+          Completed and in-flight jobs will appear here once created.
+        </p>
+      )}
+    </section>
+  );
+
   return (
     <main className={styles.page} id="top">
       <header
@@ -430,10 +605,6 @@ export default function HomePage() {
             Video Analysis
           </a>
           <div className={styles.siteNav}>
-            <a href="#capabilities">Capabilities</a>
-            <a href="#workflow">Workflow</a>
-            <a href="#use-cases">Use Cases</a>
-            <a href="#preview">Preview</a>
             <a
               className={`${styles.primaryButton} ${styles.buttonLink}`}
               href="#analysis-entry"
@@ -443,112 +614,106 @@ export default function HomePage() {
           </div>
         </div>
       </header>
-      <Hero />
-      <HomepageSections />
-      <section className={`${styles.content} ${styles.analysisEntry}`} id="analysis-entry">
+      <Hero
+        inputArea={
+          <div className={styles.heroFormStack}>
+            <InputSwitcher onChange={setInputMode} value={inputMode} />
+            <AnalyzeForm inputMode={inputMode} onJobCreated={handleJobCreated} />
+          </div>
+        }
+      />
+      {!jobState ? <HomepageSections /> : null}
+      <section
+        className={`${styles.content} ${styles.resultsSection}`}
+        id="results-workspace"
+        ref={resultsSectionRef}
+      >
         <div className={styles.analysisEntryIntro}>
           <p className={`${styles.eyebrow} ${styles.compactEyebrow}`}>
-            Workspace entry
+            Results workspace
           </p>
           <h2 className={styles.analysisEntryTitle}>
-            Start with a recording. Leave with searchable answers.
+            Review the details after analysis starts.
           </h2>
           <p className={styles.analysisEntryDescription}>
-            Add a recording source to open one workspace for transcript review,
-            summary takeaways, and grounded follow-up questions. The live
-            analysis area below keeps status, recording context, and AI outputs
-            connected as the job progresses.
+            The live workspace below keeps status, video details, transcript,
+            summary, and follow-up questions in one place once a job is in
+            motion.
           </p>
         </div>
-        <InputSwitcher onChange={setInputMode} value={inputMode} />
         <div className={styles.workflowLayout}>
-          <div className={styles.workflowSidebar}>
-            <AnalyzeForm inputMode={inputMode} onJobCreated={handleJobCreated} />
-            <section aria-label="Recent jobs" className={styles.panel}>
-              <h2 className={styles.panelTitle}>Recent jobs</h2>
-              {jobHistory.length > 0 ? (
-                <ul className={styles.historyList}>
-                  {jobHistory.map((job) => (
-                    <li key={job.id}>
-                      <button
-                        aria-pressed={jobState?.id === job.id}
-                        className={styles.historyButton}
-                        onClick={() => handleHistorySelection(job.id)}
-                        type="button"
-                      >
-                        <span>{job.source_url}</span>
-                        {job.title ? (
-                          <span className={styles.historyMeta}>
-                            Title: {job.title}
-                          </span>
-                        ) : null}
-                        <span className={styles.historyMeta}>
-                          {job.status} • {job.stage}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className={styles.workspaceDescription}>
-                  Completed and in-flight jobs will appear here once created.
-                </p>
-              )}
-            </section>
-          </div>
           {jobState ? (
+            <div className={styles.resultsGrid}>
+              <div className={styles.resultsSidebar}>
+                <VideoInfoPanel
+                  detectedLanguageName={jobState.detected_language_name}
+                  description={jobState.description}
+                  durationSeconds={jobState.duration_seconds}
+                  inputMode={jobState.input_mode}
+                  jobId={jobState.id}
+                  sourceName={jobState.source_name}
+                  sourceUrl={jobState.source_url}
+                  thumbnailUrl={jobState.thumbnail_url}
+                  title={jobState.title}
+                />
+                <StatusTimeline items={buildTimelineItems(jobState)} />
+              </div>
+              <div className={styles.resultsPrimary}>
+                {loadError ? (
+                  <p className={styles.formFeedback}>{loadError}</p>
+                ) : null}
+                <AITabs
+                  activeJobId={jobState.id}
+                  detectedLanguageName={jobState.detected_language_name}
+                  jobStage={jobState.stage}
+                  jobStatus={jobState.status}
+                  mindmapNodeCount={jobState.mindmap_node_count}
+                  mindmapPreviewText={jobState.mindmap_preview_text}
+                  mindmapStatus={jobState.mindmap_status}
+                  summaryKeyPointsCount={jobState.summary_key_points_count}
+                  summaryPreviewText={jobState.summary_preview_text}
+                  summarySourceBullets={jobState.summary_source_bullets}
+                  summarySourceText={jobState.summary_source_text}
+                  summaryTranslations={jobState.summary_translations}
+                  summaryStatus={jobState.summary_status}
+                  transcriptAudioArtifactPath={jobState.transcript_audio_artifact_path}
+                  transcriptExtractor={jobState.transcript_extractor}
+                  transcriptPreviewText={jobState.transcript_preview_text}
+                  transcriptSourceText={jobState.transcript_source_text}
+                  transcriptTranslations={jobState.transcript_translations}
+                  transcriptSegmentCount={jobState.transcript_segment_count}
+                  transcriptStatus={jobState.transcript_status}
+                  tabs={
+                    jobState.status === "completed"
+                      ? ["Ask AI", "Summary", "Transcript", "Mind Map"]
+                      : undefined
+                  }
+                />
+              </div>
+              {recentJobsPanel}
+            </div>
+          ) : (
             <div className={styles.workflowPanels}>
               {loadError ? (
                 <p className={styles.formFeedback}>{loadError}</p>
               ) : null}
-              <StatusTimeline items={buildTimelineItems(jobState)} />
-              <VideoInfoPanel
-                description={jobState.description}
-                durationSeconds={jobState.duration_seconds}
-                inputMode={jobState.input_mode}
-                jobId={jobState.id}
-                sourceName={jobState.source_name}
-                sourceUrl={jobState.source_url}
-                thumbnailUrl={jobState.thumbnail_url}
-                title={jobState.title}
-              />
-              <AITabs
-                activeJobId={jobState.id}
-                jobStage={jobState.stage}
-                jobStatus={jobState.status}
-                mindmapNodeCount={jobState.mindmap_node_count}
-                mindmapPreviewText={jobState.mindmap_preview_text}
-                mindmapStatus={jobState.mindmap_status}
-                summaryKeyPointsCount={jobState.summary_key_points_count}
-                summaryPreviewText={jobState.summary_preview_text}
-                summaryStatus={jobState.summary_status}
-                transcriptAudioArtifactPath={jobState.transcript_audio_artifact_path}
-                transcriptExtractor={jobState.transcript_extractor}
-                transcriptPreviewText={jobState.transcript_preview_text}
-                transcriptSegmentCount={jobState.transcript_segment_count}
-                transcriptStatus={jobState.transcript_status}
-                tabs={
-                  jobState.status === "completed"
-                    ? ["Ask AI", "Summary", "Transcript", "Mind Map"]
-                    : undefined
-                }
-              />
+              <section aria-label="Analysis workspace" className={styles.panel}>
+                <h2 className={styles.panelTitle}>Analysis workspace</h2>
+                <p className={styles.workspaceDescription}>
+                  {isHydrating
+                    ? "Loading saved analysis shell..."
+                    : "Start an analysis to unlock status, video info, transcript, summary, mind map, and Ask AI panels."}
+                </p>
+                {loadError ? (
+                  <p className={styles.formFeedback}>{loadError}</p>
+                ) : null}
+              </section>
+              {recentJobsPanel}
             </div>
-          ) : (
-            <section aria-label="Analysis workspace" className={styles.panel}>
-              <h2 className={styles.panelTitle}>Analysis workspace</h2>
-              <p className={styles.workspaceDescription}>
-                {isHydrating
-                  ? "Loading saved analysis shell..."
-                  : "Start an analysis to unlock status, video info, transcript, summary, mind map, and Ask AI panels."}
-              </p>
-              {loadError ? (
-                <p className={styles.formFeedback}>{loadError}</p>
-              ) : null}
-            </section>
           )}
         </div>
       </section>
+      {jobState ? <HomepageSections /> : null}
     </main>
   );
 }

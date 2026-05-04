@@ -2,6 +2,7 @@ import type { InputMode } from "../lib/types";
 import styles from "../app/homepage.module.css";
 
 type VideoInfoPanelProps = {
+  detectedLanguageName?: string | null;
   description?: string | null;
   durationSeconds?: number | null;
   inputMode?: InputMode | null;
@@ -45,6 +46,7 @@ function formatPlatformLabel(sourceUrl?: string | null, inputMode?: InputMode | 
 }
 
 export function VideoInfoPanel({
+  detectedLanguageName,
   description,
   durationSeconds,
   inputMode,
@@ -96,6 +98,12 @@ export function VideoInfoPanel({
         <div>
           <dt className={styles.infoLabel}>Duration</dt>
           <dd className={styles.infoValue}>{formatDuration(durationSeconds)}</dd>
+        </div>
+        <div>
+          <dt className={styles.infoLabel}>Audio language</dt>
+          <dd className={styles.infoValue}>
+            {detectedLanguageName || "Detecting after transcription"}
+          </dd>
         </div>
         <div>
           <dt className={styles.infoLabel}>Description</dt>

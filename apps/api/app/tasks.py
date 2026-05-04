@@ -1,4 +1,6 @@
 import inspect
+import json
+from types import SimpleNamespace
 from uuid import UUID
 
 from app.models.job import InputMode, JobStatus
@@ -76,6 +78,16 @@ def _apply_public_video_transcript_shell(
     job.stage = transcript_shell.stage
 
 
+def _mark_public_video_transcript_execution_started(job) -> None:
+    job.transcript_status = "processing"
+    job.transcript_preview_text = (
+        "Preparing the speech model. First transcript lines may take a moment."
+    )
+    job.transcript_segment_count = 0
+    job.status = JobStatus.RUNNING
+    job.stage = "generating_transcript"
+
+
 def _mark_public_video_transcript_failure(job, exc: PublicVideoTranscriptShellError) -> None:
     job.status = JobStatus.FAILED
     job.stage = exc.reason
@@ -87,8 +99,15 @@ def _apply_public_video_transcript_result(
     transcript_result: PublicVideoTranscriptResult,
 ) -> None:
     job.transcript_status = transcript_result.status
-    job.transcript_preview_text = transcript_result.preview_text
-    job.transcript_segment_count = transcript_result.segment_count
+    job.detected_language_code = getattr(transcript_result, "detected_language_code", None)
+    job.detected_language_name = getattr(transcript_result, "detected_language_name", None)
+    job.transcript_preview_text = getattr(transcript_result, "preview_text", None)
+    job.transcript_source_text = getattr(transcript_result, "source_text", None)
+    source_segments_json = getattr(transcript_result, "source_segments_json", None)
+    job.transcript_source_segments_json = (
+        source_segments_json() if callable(source_segments_json) else None
+    )
+    job.transcript_segment_count = getattr(transcript_result, "segment_count", None)
     job.status = JobStatus.RUNNING
     job.stage = transcript_result.stage
 
@@ -107,10 +126,45 @@ def _apply_public_video_summary_shell(
     summary_shell: PublicVideoSummaryShell,
 ) -> None:
     job.summary_status = summary_shell.status
-    job.summary_preview_text = summary_shell.preview_text
-    job.summary_key_points_count = summary_shell.key_points_count
+    job.summary_preview_text = getattr(summary_shell, "preview_text", None)
+    job.summary_source_text = getattr(summary_shell, "source_text", None)
+    source_bullets_json = getattr(summary_shell, "source_bullets_json", None)
+    job.summary_source_bullets_json = (
+        source_bullets_json() if callable(source_bullets_json) else None
+    )
+    job.summary_key_points_count = getattr(summary_shell, "key_points_count", None)
     job.status = JobStatus.RUNNING
     job.stage = summary_shell.stage
+
+
+def _apply_public_video_partial_summary_shell(
+    job,
+    summary_shell: PublicVideoSummaryShell,
+) -> None:
+    job.summary_status = "processing"
+    job.summary_preview_text = getattr(summary_shell, "preview_text", None)
+    job.summary_source_text = getattr(summary_shell, "source_text", None)
+    source_bullets_json = getattr(summary_shell, "source_bullets_json", None)
+    job.summary_source_bullets_json = (
+        source_bullets_json() if callable(source_bullets_json) else None
+    )
+    job.summary_key_points_count = getattr(summary_shell, "key_points_count", None)
+    job.status = JobStatus.RUNNING
+
+
+def _build_partial_summary_shell(
+    summary_shell: PublicVideoSummaryShell,
+) -> PublicVideoSummaryShell:
+    source_bullets = list(summary_shell.source_bullets[:2]) if summary_shell.source_bullets else []
+
+    return PublicVideoSummaryShell(
+        status="processing",
+        stage="generating_transcript",
+        source_text=summary_shell.source_text,
+        source_bullets=source_bullets,
+        preview_text=summary_shell.preview_text,
+        key_points_count=len(source_bullets),
+    )
 
 
 def _mark_public_video_summary_failure(job, exc: PublicVideoSummaryShellError) -> None:
@@ -280,8 +334,121 @@ async def _execute_public_video_download(
         ctx.get("execute_public_video_transcript_shell")
         or execute_public_video_transcript_shell
     )
+    generate_summary_shell = (
+        ctx.get("generate_public_video_summary_shell")
+        or generate_public_video_summary_shell
+    )
+    _mark_public_video_transcript_execution_started(job)
+    await _resolve(persist_job(job))
+    await _publish_event(
+        publisher,
+        "job.status",
+        {
+            "job_id": str(job_id),
+            "status": job.status.value,
+            "stage": job.stage,
+        },
+    )
+    segment_started = True
+    last_partial_summary_segment_count = 0
+
+    def on_transcript_segment(segment_payload: dict[str, object]) -> None:
+        nonlocal last_partial_summary_segment_count, segment_started
+        if segment_started:
+            segment_started = False
+
+        job.transcript_status = "processing"
+        job.stage = "generating_transcript"
+        job.detected_language_code = (
+            segment_payload.get("detected_language_code")
+            if isinstance(segment_payload.get("detected_language_code"), str)
+            else job.detected_language_code
+        )
+        job.detected_language_name = (
+            segment_payload.get("detected_language_name")
+            if isinstance(segment_payload.get("detected_language_name"), str)
+            else job.detected_language_name
+        )
+        job.transcript_preview_text = (
+            segment_payload.get("preview_text")
+            if isinstance(segment_payload.get("preview_text"), str)
+            else job.transcript_preview_text
+        )
+        job.transcript_source_text = (
+            segment_payload.get("source_text")
+            if isinstance(segment_payload.get("source_text"), str)
+            else job.transcript_source_text
+        )
+        if isinstance(segment_payload.get("segment_count"), int):
+            job.transcript_segment_count = segment_payload["segment_count"]
+        if isinstance(segment_payload.get("source_segments"), list):
+            job.transcript_source_segments_json = json.dumps(
+                segment_payload["source_segments"],
+                ensure_ascii=False,
+            )
+
+        persist_job(job)
+        publish_now = ctx.get("publish")
+        if publish_now is not None:
+            publish_now(
+                "transcript.segment",
+                {
+                    "job_id": str(job_id),
+                    "transcript": segment_payload,
+                },
+            )
+            publish_now(
+                "job.status",
+                {
+                    "job_id": str(job_id),
+                    "status": job.status.value,
+                    "stage": job.stage,
+                },
+            )
+
+        if not isinstance(job.transcript_segment_count, int):
+            return
+
+        if job.transcript_segment_count < 3 or job.transcript_segment_count % 3 != 0:
+            return
+
+        if job.transcript_segment_count == last_partial_summary_segment_count:
+            return
+
+        try:
+            partial_summary_source = SimpleNamespace(
+                transcript_preview_text=job.transcript_preview_text,
+                transcript_source_text=job.transcript_source_text,
+                transcript_status="ready",
+                summary_mode="partial",
+            )
+            summary_shell = generate_summary_shell(partial_summary_source)
+        except PublicVideoSummaryShellError:
+            return
+
+        partial_summary_shell = _build_partial_summary_shell(summary_shell)
+        _apply_public_video_partial_summary_shell(job, partial_summary_shell)
+        last_partial_summary_segment_count = job.transcript_segment_count
+        persist_job(job)
+        if publish_now is not None:
+            publish_now(
+                "summary.partial",
+                {
+                    "job_id": str(job_id),
+                    "summary": partial_summary_shell.model_dump(),
+                },
+            )
     try:
-        transcript_result = await _resolve(execute_transcript_shell(job))
+        execute_transcript_signature = inspect.signature(execute_transcript_shell)
+        if "on_segment" in execute_transcript_signature.parameters:
+            transcript_result = await _resolve(
+                execute_transcript_shell(
+                    job,
+                    on_segment=on_transcript_segment,
+                ),
+            )
+        else:
+            transcript_result = await _resolve(execute_transcript_shell(job))
     except PublicVideoTranscriptExecutionError as exc:
         _mark_public_video_transcript_execution_failure(job, exc)
         await _resolve(persist_job(job))
@@ -313,10 +480,6 @@ async def _execute_public_video_download(
         },
     )
 
-    generate_summary_shell = (
-        ctx.get("generate_public_video_summary_shell")
-        or generate_public_video_summary_shell
-    )
     try:
         summary_shell = await _resolve(generate_summary_shell(job))
     except PublicVideoSummaryShellError as exc:

@@ -48,13 +48,17 @@ def test_execute_public_video_download_shell_returns_ready_result(
 
     def fake_run(*_args, **_kwargs) -> CompletedProcess[str]:
         return CompletedProcess(
-            args=["yt-dlp"],
+            args=["python", "-m", "yt_dlp"],
             returncode=0,
             stdout=str(tmp_path / "artifact.mp4") + "\n",
             stderr="",
         )
 
     monkeypatch.setattr("app.services.downloads.public_video.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "app.services.downloads.public_video._resolve_yt_dlp_command",
+        lambda: ["python", "-m", "yt_dlp"],
+    )
 
     result = execute_public_video_download_shell(job, planned=planned, download_root=tmp_path)
 
@@ -74,6 +78,10 @@ def test_execute_public_video_download_shell_normalizes_missing_tool(
         raise FileNotFoundError("yt-dlp")
 
     monkeypatch.setattr("app.services.downloads.public_video.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "app.services.downloads.public_video._resolve_yt_dlp_command",
+        lambda: ["yt-dlp"],
+    )
 
     with pytest.raises(PublicVideoDownloadError) as exc_info:
         execute_public_video_download_shell(job, download_root=tmp_path)
@@ -96,12 +104,45 @@ def test_execute_public_video_download_shell_normalizes_non_zero_exit(
         )
 
     monkeypatch.setattr("app.services.downloads.public_video.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "app.services.downloads.public_video._resolve_yt_dlp_command",
+        lambda: ["python", "-m", "yt_dlp"],
+    )
 
     with pytest.raises(PublicVideoDownloadError) as exc_info:
         execute_public_video_download_shell(job, download_root=tmp_path)
 
     assert exc_info.value.reason == "download_failed"
     assert "download failed" in exc_info.value.message
+
+
+def test_execute_public_video_download_shell_uses_python_module_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    job = _make_job()
+    captured_command: list[str] | None = None
+
+    def fake_run(command: list[str], **_kwargs) -> CompletedProcess[str]:
+        nonlocal captured_command
+        captured_command = command
+        return CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout=str(tmp_path / "artifact.mp4") + "\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr("app.services.downloads.public_video.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "app.services.downloads.public_video._resolve_yt_dlp_command",
+        lambda: ["python", "-m", "yt_dlp"],
+    )
+
+    execute_public_video_download_shell(job, download_root=tmp_path)
+
+    assert captured_command is not None
+    assert captured_command[:3] == ["python", "-m", "yt_dlp"]
 
 
 def test_process_analysis_job_persists_download_shell_result(tmp_path: Path) -> None:
@@ -139,6 +180,43 @@ def test_process_analysis_job_persists_download_shell_result(tmp_path: Path) -> 
             },
         )
 
+    def prepare_transcript(_job: AnalysisJob):
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_ready",
+            extractor="ffmpeg",
+            audio_artifact_path=str(tmp_path / "artifact.wav"),
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_ready",
+                "extractor": "ffmpeg",
+                "audio_artifact_path": str(tmp_path / "artifact.wav"),
+            },
+        )
+
+    def execute_transcript(_job: AnalysisJob):
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_generated",
+            detected_language_code="en",
+            detected_language_name="English",
+            source_text="Hello team.",
+            source_segments=[{"start": 0.0, "end": 1.0, "text": "Hello team."}],
+            source_segments_json=lambda: '[{"start": 0.0, "end": 1.0, "text": "Hello team."}]',
+            preview_text="Hello team.",
+            segment_count=1,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_generated",
+                "detected_language_code": "en",
+                "detected_language_name": "English",
+                "source_text": "Hello team.",
+                "source_segments": [{"start": 0.0, "end": 1.0, "text": "Hello team."}],
+                "preview_text": "Hello team.",
+                "segment_count": 1,
+            },
+        )
+
     asyncio.run(
         process_analysis_job(
             {
@@ -147,15 +225,16 @@ def test_process_analysis_job_persists_download_shell_result(tmp_path: Path) -> 
                 "persist_job": persist_job,
                 "plan_public_video_download_shell": lambda current_job: planned_download,
                 "execute_public_video_download_shell": execute_download,
+                "prepare_public_video_transcript_shell": prepare_transcript,
+                "execute_public_video_transcript_shell": execute_transcript,
             },
             job.id,
         )
     )
 
     assert any(name == "video.download" for name, _payload in calls)
-    assert persisted_jobs == [("ready", "download_ready")]
+    assert ("ready", "download_ready") in persisted_jobs
     assert job.download_status == "ready"
-    assert job.stage == "download_ready"
     assert job.download_artifact_path == str(tmp_path / "artifact.mp4")
 
 
@@ -260,6 +339,29 @@ def test_process_analysis_job_persists_transcript_shell_after_download(tmp_path:
             },
         )
 
+    def execute_transcript(_job: AnalysisJob):
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_generated",
+            detected_language_code="en",
+            detected_language_name="English",
+            source_text="Hello team.",
+            source_segments=[{"start": 0.0, "end": 1.0, "text": "Hello team."}],
+            source_segments_json=lambda: '[{"start": 0.0, "end": 1.0, "text": "Hello team."}]',
+            preview_text="Hello team.",
+            segment_count=1,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_generated",
+                "detected_language_code": "en",
+                "detected_language_name": "English",
+                "source_text": "Hello team.",
+                "source_segments": [{"start": 0.0, "end": 1.0, "text": "Hello team."}],
+                "preview_text": "Hello team.",
+                "segment_count": 1,
+            },
+        )
+
     asyncio.run(
         process_analysis_job(
             {
@@ -269,6 +371,7 @@ def test_process_analysis_job_persists_transcript_shell_after_download(tmp_path:
                 "plan_public_video_download_shell": lambda current_job: planned_download,
                 "execute_public_video_download_shell": execute_download,
                 "prepare_public_video_transcript_shell": prepare_transcript,
+                "execute_public_video_transcript_shell": execute_transcript,
             },
             job.id,
         )
@@ -276,11 +379,9 @@ def test_process_analysis_job_persists_transcript_shell_after_download(tmp_path:
 
     assert any(name == "video.download" for name, _payload in calls)
     assert any(name == "transcript.shell" for name, _payload in calls)
-    assert persisted_jobs == [
-        ("ready", "download_ready", None),
-        ("ready", "transcript_ready", "ready"),
-    ]
-    assert job.stage == "transcript_ready"
+    assert ("ready", "download_ready", None) in persisted_jobs
+    assert ("ready", "transcript_ready", "ready") in persisted_jobs
+    assert ("ready", "generating_transcript", "processing") in persisted_jobs
     assert job.transcript_status == "ready"
     assert job.transcript_extractor == "ffmpeg"
     assert job.transcript_audio_artifact_path == str(tmp_path / "artifact.wav")

@@ -52,12 +52,17 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
     client, testing_session = make_test_client(tmp_path)
 
     original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    started_jobs: list[str] = []
     jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
         title="Sample Video",
         duration_seconds=120,
         thumbnail_url="https://example.com/thumb.jpg",
         source_name="Example Channel",
         description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = (
+        lambda job_id, _bind: started_jobs.append(str(job_id))
     )
 
     try:
@@ -69,6 +74,7 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
         )
     finally:
         jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
         app.dependency_overrides.clear()
 
     body = response.json()
@@ -90,6 +96,7 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
     assert body["transcript_status"] is None
     assert body["transcript_extractor"] is None
     assert body["transcript_audio_artifact_path"] is None
+    assert started_jobs == [body["id"]]
 
     with testing_session() as session:
         persisted_job = session.query(AnalysisJob).one()
@@ -131,6 +138,8 @@ def test_create_job_returns_failed_shell_when_probe_fails(tmp_path) -> None:
     client, testing_session = make_test_client(tmp_path)
 
     original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    started_jobs: list[str] = []
 
     def raise_probe_error(_source_url: str) -> VideoMetadata:
         raise jobs_routes.PublicVideoProbeError(
@@ -139,6 +148,9 @@ def test_create_job_returns_failed_shell_when_probe_fails(tmp_path) -> None:
         )
 
     jobs_routes.probe_public_video_metadata = raise_probe_error
+    jobs_routes.run_public_video_job_in_background = (
+        lambda job_id, _bind: started_jobs.append(str(job_id))
+    )
 
     try:
         response = client.post(
@@ -147,6 +159,7 @@ def test_create_job_returns_failed_shell_when_probe_fails(tmp_path) -> None:
         )
     finally:
         jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
         app.dependency_overrides.clear()
 
     body = response.json()
@@ -162,12 +175,14 @@ def test_create_job_returns_failed_shell_when_probe_fails(tmp_path) -> None:
     assert persisted_job.status.value == "failed"
     assert persisted_job.stage == "unsupported_url"
     assert persisted_job.title is None
+    assert started_jobs == []
 
 
 def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
     client, testing_session = make_test_client(tmp_path)
 
     original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
     jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
         title="Sample Video",
         duration_seconds=120,
@@ -175,6 +190,7 @@ def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
         source_name="Example Channel",
         description="A short description",
     )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
 
     try:
         created = client.post(
@@ -190,11 +206,16 @@ def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
             persisted_job.download_format_id = "best"
             persisted_job.download_format_label = "best-available"
             persisted_job.download_artifact_path = "artifacts/downloads/demo/sample-video.mp4"
+            persisted_job.detected_language_code = "zh"
+            persisted_job.detected_language_name = "Chinese"
+            persisted_job.transcript_source_text = "大家好，欢迎来到今天的会议。"
+            persisted_job.summary_source_text = "会议确定了发布时间。"
             session.commit()
 
         response = client.get(f"/api/jobs/{job_id}")
     finally:
         jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
         app.dependency_overrides.clear()
 
     body = response.json()
@@ -210,6 +231,10 @@ def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
     assert body["download_format_id"] == "best"
     assert body["download_format_label"] == "best-available"
     assert body["download_artifact_path"] == "artifacts/downloads/demo/sample-video.mp4"
+    assert body["detected_language_code"] == "zh"
+    assert body["detected_language_name"] == "Chinese"
+    assert body["transcript_source_text"] == "大家好，欢迎来到今天的会议。"
+    assert body["summary_source_text"] == "会议确定了发布时间。"
     assert body["transcript_status"] is None
     assert body["transcript_extractor"] is None
     assert body["transcript_audio_artifact_path"] is None
@@ -231,6 +256,7 @@ def test_list_jobs_returns_recent_jobs_first(tmp_path) -> None:
     client, testing_session = make_test_client(tmp_path)
 
     original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
     jobs_routes.probe_public_video_metadata = lambda source_url: VideoMetadata(
         title=f"Title for {source_url.rsplit('/', 1)[-1]}",
         duration_seconds=90 if source_url.endswith("first") else 180,
@@ -238,6 +264,7 @@ def test_list_jobs_returns_recent_jobs_first(tmp_path) -> None:
         source_name="Example Channel",
         description=f"Description for {source_url.rsplit('/', 1)[-1]}",
     )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
 
     try:
         first = client.post(
@@ -250,6 +277,7 @@ def test_list_jobs_returns_recent_jobs_first(tmp_path) -> None:
         ).json()
     finally:
         jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
 
     with testing_session() as session:
         jobs = session.query(AnalysisJob).order_by(AnalysisJob.source_url).all()
@@ -381,3 +409,124 @@ def test_submit_job_question_rejects_jobs_without_grounded_context(tmp_path) -> 
     assert response.json() == {
         "detail": "Ask AI is not ready for grounded questions yet"
     }
+
+
+def test_translate_job_content_returns_cached_transcript_translation(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    original_translate = getattr(jobs_routes, "translate_job_content")
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        with testing_session() as session:
+            persisted_job = session.query(AnalysisJob).one()
+            persisted_job.detected_language_code = "zh"
+            persisted_job.detected_language_name = "Chinese"
+            persisted_job.transcript_source_text = "大家好，欢迎来到今天的会议。"
+            persisted_job.transcript_translations_json = (
+                "{\"en\": \"Hello everyone, welcome to today's meeting.\"}"
+            )
+            session.commit()
+
+        def fail_translate(**_kwargs):
+            raise AssertionError("cached translation should not invoke translator")
+
+        jobs_routes.translate_job_content = fail_translate
+
+        response = client.post(
+            f"/api/jobs/{job_id}/translations",
+            json={
+                "content_type": "transcript",
+                "target_language_code": "en",
+            },
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.translate_job_content = original_translate
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "content_type": "transcript",
+        "job_id": job_id,
+        "source_language_code": "zh",
+        "target_language_code": "en",
+        "translated_text": "Hello everyone, welcome to today's meeting.",
+    }
+
+
+def test_translate_job_content_persists_new_summary_translation(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    original_translate = getattr(jobs_routes, "translate_job_content")
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        with testing_session() as session:
+            persisted_job = session.query(AnalysisJob).one()
+            persisted_job.detected_language_code = "zh"
+            persisted_job.detected_language_name = "Chinese"
+            persisted_job.summary_source_text = "会议确定了发布时间。"
+            session.commit()
+
+        def fake_translate(*, source_language_code: str, target_language_code: str, text: str):
+            assert source_language_code == "zh"
+            assert target_language_code == "en"
+            assert text == "会议确定了发布时间。"
+            return "The meeting confirmed the release date."
+
+        jobs_routes.translate_job_content = fake_translate
+
+        response = client.post(
+            f"/api/jobs/{job_id}/translations",
+            json={
+                "content_type": "summary",
+                "target_language_code": "en",
+            },
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.translate_job_content = original_translate
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "content_type": "summary",
+        "job_id": job_id,
+        "source_language_code": "zh",
+        "target_language_code": "en",
+        "translated_text": "The meeting confirmed the release date.",
+    }
+
+    with testing_session() as session:
+        persisted_job = session.query(AnalysisJob).one()
+
+    assert persisted_job.summary_translations_json == (
+        '{"en": "The meeting confirmed the release date."}'
+    )

@@ -1,9 +1,53 @@
 import json
+import asyncio
+from collections.abc import Generator
+from pathlib import Path
+import uuid
 
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.api.routes.events import stream_job_events
 from app.main import app
-from app.services.events import format_sse_message
+from app.db import get_session
+from app.models.job import AnalysisJob, InputMode, JobStatus
+from app.services.events import JobEventBroker, format_sse_message, job_event_broker
+
+API_ROOT = Path(__file__).resolve().parents[1]
+ALEMBIC_INI_PATH = API_ROOT / "alembic.ini"
+ALEMBIC_SCRIPT_PATH = API_ROOT / "alembic"
+
+
+def migrate_database(database_path: Path) -> None:
+    config = Config(str(ALEMBIC_INI_PATH))
+    config.set_main_option("script_location", str(ALEMBIC_SCRIPT_PATH))
+    config.set_main_option("sqlalchemy.url", f"sqlite:///{database_path}")
+    command.upgrade(config, "head")
+
+
+def make_test_client(tmp_path: Path) -> tuple[TestClient, sessionmaker[Session]]:
+    database_path = tmp_path / "jobs.db"
+    migrate_database(database_path)
+    engine = create_engine(f"sqlite:///{database_path}", future=True)
+    testing_session = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        autocommit=False,
+        future=True,
+    )
+
+    def override_get_session() -> Generator[Session, None, None]:
+        session = testing_session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_session] = override_get_session
+    return TestClient(app), testing_session
 
 
 def test_formats_sse_message() -> None:
@@ -11,21 +55,59 @@ def test_formats_sse_message() -> None:
     assert payload == 'event: job.status\ndata: {"status":"queued"}\n\n'
 
 
-def test_stream_job_events_returns_single_sse_message() -> None:
-    client = TestClient(app)
-    job_id = "job-123"
+def test_job_event_broker_delivers_published_messages() -> None:
+    async def exercise_broker() -> str:
+        broker = JobEventBroker()
+        iterator = broker.subscribe("job-123")
+        next_message = asyncio.create_task(iterator.__anext__())
+        await asyncio.sleep(0)
+        broker.publish_nowait(
+            "job-123",
+            "transcript.segment",
+            {"segment_count": 1},
+        )
+        try:
+            return await asyncio.wait_for(next_message, timeout=1)
+        finally:
+            await iterator.aclose()
 
-    response = client.get(f"/api/jobs/{job_id}/events")
+    payload = asyncio.run(exercise_broker())
 
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/event-stream")
+    assert (
+        payload
+        == 'event: transcript.segment\ndata: {"segment_count":1}\n\n'
+    )
 
-    body = response.text
-    assert body.count("event: job.status\n") == 1
 
-    lines = body.strip().splitlines()
+def test_stream_job_events_returns_initial_job_status(tmp_path) -> None:
+    _client, testing_session = make_test_client(tmp_path)
+    job_id = "11111111-1111-1111-1111-111111111111"
+
+    with testing_session() as session:
+        session.add(
+            AnalysisJob(
+                id=uuid.UUID(job_id),
+                input_mode=InputMode.PUBLIC_VIDEO,
+                source_url="https://example.com/live-stream",
+                stage="generating_transcript",
+                status=JobStatus.RUNNING,
+            ),
+        )
+        session.commit()
+
+    with testing_session() as session:
+        response = asyncio.run(stream_job_events(uuid.UUID(job_id), session))
+        first_chunk = asyncio.run(response.body_iterator.__anext__())
+        asyncio.run(response.body_iterator.aclose())
+
+    assert response.media_type == "text/event-stream"
+    lines = first_chunk.strip().splitlines()
     assert lines[0] == "event: job.status"
-    assert lines[1].startswith("data: ")
+    initial_payload = json.loads(lines[1].removeprefix("data: "))
+    assert initial_payload == {
+        "job_id": job_id,
+        "status": "running",
+        "stage": "generating_transcript",
+    }
 
-    payload = json.loads(lines[1].removeprefix("data: "))
-    assert payload == {"job_id": job_id, "status": "queued"}
+    app.dependency_overrides.clear()

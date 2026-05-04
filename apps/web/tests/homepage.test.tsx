@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act } from "@testing-library/react";
 import { vi } from "vitest";
 
 import HomePage from "../app/page";
@@ -21,69 +22,49 @@ beforeEach(() => {
   window.history.replaceState({}, "", "/");
   vi.mocked(sse.subscribeToJobEvents).mockReturnValue(() => undefined);
   vi.mocked(api.listJobs).mockResolvedValue([]);
+  vi.useRealTimers();
 });
 
-test("renders the new homepage narrative sections", () => {
+test("renders a url-first homepage with lightweight supporting sections", () => {
   render(<HomePage />);
-  const capabilitiesSection = document.getElementById("capabilities")!;
-  const previewSection = document.getElementById("preview")!;
+  const howItWorksSection = document.getElementById("how-it-works")!;
+  const whatYouGetSection = document.getElementById("what-you-get")!;
 
   expect(
     screen.getByRole("heading", {
-      name: "Turn recordings into transcripts, summaries, and answers.",
+      name: "Paste a video URL. Get transcript, summary, and answers.",
     }),
   ).toBeInTheDocument();
-  expect(screen.getByText("Video analysis for teams")).toBeInTheDocument();
+  expect(screen.getByText("Fast video analysis")).toBeInTheDocument();
   expect(
-    screen.getByRole("link", {
-      name: "Capabilities",
-    }),
-  ).toHaveAttribute("href", "#capabilities");
-  expect(
-    screen.getByRole("link", {
-      name: "Workflow",
-    }),
-  ).toHaveAttribute("href", "#workflow");
-  expect(
-    screen.getByRole("link", {
-      name: "Use Cases",
-    }),
-  ).toHaveAttribute("href", "#use-cases");
-  expect(
-    screen.getByRole("link", {
-      name: "Preview",
-    }),
-  ).toHaveAttribute("href", "#preview");
-  expect(screen.getByText("Built for recorded meetings")).toBeInTheDocument();
-  expect(within(capabilitiesSection).getByText("Transcript")).toBeInTheDocument();
-  expect(within(capabilitiesSection).getByText("Summary")).toBeInTheDocument();
-  expect(within(capabilitiesSection).getByText("Ask AI")).toBeInTheDocument();
-  expect(within(capabilitiesSection).getByText("Mind Map")).toBeInTheDocument();
-  expect(screen.getByText("Meeting review")).toBeInTheDocument();
-  expect(screen.getByText("Training recap")).toBeInTheDocument();
-  expect(screen.getByText("Knowledge capture")).toBeInTheDocument();
-  expect(within(previewSection).getByText("Status timeline")).toBeInTheDocument();
-  expect(within(previewSection).getByText("Video info")).toBeInTheDocument();
-  expect(within(previewSection).getByText("Transcript")).toBeInTheDocument();
-  expect(within(previewSection).getByText("Summary")).toBeInTheDocument();
-  expect(within(previewSection).getByText("Ask AI")).toBeInTheDocument();
+    screen.getByRole("link", { name: "Start analysis" }),
+  ).toHaveAttribute("href", "#analysis-entry");
+  expect(screen.getByText("YouTube")).toBeInTheDocument();
+  expect(screen.getByText("Instagram")).toBeInTheDocument();
+  expect(screen.getByText("TikTok")).toBeInTheDocument();
+  expect(screen.getByText("Facebook")).toBeInTheDocument();
+  expect(within(howItWorksSection).getByText("Paste URL")).toBeInTheDocument();
+  expect(within(howItWorksSection).getByText("Analyze")).toBeInTheDocument();
+  expect(within(howItWorksSection).getByText("Review")).toBeInTheDocument();
+  expect(within(whatYouGetSection).getByText("Transcript")).toBeInTheDocument();
+  expect(within(whatYouGetSection).getByText("Summary")).toBeInTheDocument();
+  expect(within(whatYouGetSection).getByText("Ask AI")).toBeInTheDocument();
 });
 
-test("keeps CTA anchors pointed at the analysis entry and workflow", () => {
+test("keeps the url input as the main above-the-fold action", () => {
   render(<HomePage />);
 
   expect(
-    screen.getAllByRole("link", { name: "Start analysis" })[0],
+    screen.getByRole("link", { name: "Start analysis" }),
   ).toHaveAttribute("href", "#analysis-entry");
-  expect(
-    screen.getByRole("link", { name: "See workflow" }),
-  ).toHaveAttribute("href", "#workflow");
-  expect(
-    within(document.getElementById("analysis-entry")!).getByRole("heading", {
-      name: "Start with a recording. Leave with searchable answers.",
-    }),
-  ).toBeInTheDocument();
   expect(screen.getByLabelText("Video source")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Analyze" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "How it works" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("heading", { name: "What you get" }),
+  ).toBeInTheDocument();
 });
 
 test("renders both input modes as accessible radio options", () => {
@@ -168,6 +149,7 @@ test("reveals the workflow panels after creating a job", async () => {
   });
 
   expect(getJob).toHaveBeenCalledWith("11111111-1111-1111-1111-111111111111");
+  expect(screen.getByRole("heading", { name: "Video info" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Summary" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Transcript" })).toBeInTheDocument();
   expect(screen.getByRole("tab", { name: "Mind Map" })).toBeInTheDocument();
@@ -179,6 +161,51 @@ test("reveals the workflow panels after creating a job", async () => {
   ).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Recent jobs" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /https:\/\/example.com\/video/i })).toBeInTheDocument();
+  expect(
+    document
+      .getElementById("results-workspace")
+      ?.compareDocumentPosition(document.getElementById("how-it-works") ?? document.body) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+});
+
+test("scrolls the user into the results workspace after starting analysis", async () => {
+  const createJob = vi.mocked(api.createJob);
+  const getJob = vi.mocked(api.getJob);
+  const scrollIntoView = vi.fn();
+
+  createJob.mockResolvedValue({
+    created_at: "2026-05-04T09:00:00Z",
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "public_video",
+    source_url: "https://example.com/video",
+    stage: "queued",
+    status: "queued",
+  });
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T09:00:00Z",
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "public_video",
+    source_url: "https://example.com/video",
+    stage: "queued",
+    status: "queued",
+  });
+
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scrollIntoView,
+  });
+
+  render(<HomePage />);
+
+  fireEvent.change(screen.getByLabelText("Video source"), {
+    target: { value: "https://example.com/video" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
+
+  await waitFor(() => {
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
 });
 
 test("shows a RingCentral stub prompt when that mode is selected", () => {
@@ -194,6 +221,79 @@ test("shows a RingCentral stub prompt when that mode is selected", () => {
   expect(
     screen.getByRole("button", { name: "Connect RingCentral (coming soon)" }),
   ).toBeInTheDocument();
+});
+
+test("polls the active job while it is still running", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+  let intervalCallback: (() => void) | null = null;
+  const setIntervalSpy = vi
+    .spyOn(window, "setInterval")
+    .mockImplementation((callback: TimerHandler) => {
+      intervalCallback = callback as () => void;
+      return 1;
+    });
+
+  window.history.replaceState({}, "", "/?job=12121212-1212-1212-1212-121212121212");
+  getJob
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T17:00:00Z",
+      id: "12121212-1212-1212-1212-121212121212",
+      input_mode: "public_video",
+      source_url: "https://example.com/polling",
+      stage: "queued",
+      status: "queued",
+    })
+    .mockResolvedValueOnce({
+      created_at: "2026-05-04T17:00:00Z",
+      id: "12121212-1212-1212-1212-121212121212",
+      input_mode: "public_video",
+      source_url: "https://example.com/polling",
+      stage: "summary_generated",
+      status: "running",
+      summary_preview_text: "Polled summary preview.",
+      summary_status: "ready",
+      title: "Polled update",
+    });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T17:00:00Z",
+      id: "12121212-1212-1212-1212-121212121212",
+      input_mode: "public_video",
+      source_url: "https://example.com/polling",
+      stage: "queued",
+      status: "queued",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 12121212-1212-1212-1212-121212121212 is queued for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  await act(async () => {
+    intervalCallback?.();
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("Polled update")).toBeInTheDocument();
+  });
+  expect(
+    screen.getByText(
+      "Job 12121212-1212-1212-1212-121212121212 generated a summary shell preview.",
+    ),
+  ).toBeInTheDocument();
+  expect(getJob).toHaveBeenCalledTimes(2);
+  expect(setIntervalSpy).toHaveBeenCalled();
+
+  setIntervalSpy.mockRestore();
+  clearIntervalSpy.mockRestore();
 });
 
 test("maps backend completed status to a complete timeline state", async () => {
@@ -333,6 +433,168 @@ test("refreshes the active job snapshot when a status event arrives", async () =
     screen.getByText("Preview: Summary shell generated from transcript preview."),
   ).toBeInTheDocument();
   expect(getJob).toHaveBeenCalledTimes(2);
+});
+
+test("streams transcript text into the transcript tab as segment events arrive", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=17171717-1717-1717-1717-171717171717",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T16:05:00Z",
+    id: "17171717-1717-1717-1717-171717171717",
+    input_mode: "public_video",
+    source_url: "https://example.com/live-transcript",
+    stage: "transcript_ready",
+    status: "running",
+    transcript_audio_artifact_path:
+      "var/transcripts/public-video/17171717-1717-1717-1717-171717171717.wav",
+    transcript_extractor: "ffmpeg",
+    transcript_status: "ready",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:05:00Z",
+      id: "17171717-1717-1717-1717-171717171717",
+      input_mode: "public_video",
+      source_url: "https://example.com/live-transcript",
+      stage: "transcript_ready",
+      status: "running",
+      transcript_audio_artifact_path:
+        "var/transcripts/public-video/17171717-1717-1717-1717-171717171717.wav",
+      transcript_extractor: "ffmpeg",
+      transcript_status: "ready",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 17171717-1717-1717-1717-171717171717 is ready for transcript generation.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  handlers?.onEvent?.({
+    event: "transcript.segment",
+    data: {
+      job_id: "17171717-1717-1717-1717-171717171717",
+      transcript: {
+        detected_language_code: "zh",
+        detected_language_name: "Chinese",
+        preview_text: "大家好，欢迎来到今天的会议。",
+        segment_count: 1,
+        source_text: "大家好，欢迎来到今天的会议。",
+      },
+    },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("Streaming transcript")).toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByText("大家好，欢迎来到今天的会议。"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Detected language: Chinese")).toBeInTheDocument();
+  expect(screen.getByText("Current language: Chinese")).toBeInTheDocument();
+  expect(screen.getByText("Segment count: 1")).toBeInTheDocument();
+  expect(
+    screen.getByText("Preview: 大家好，欢迎来到今天的会议。"),
+  ).toBeInTheDocument();
+  expect(getJob).toHaveBeenCalledTimes(1);
+});
+
+test("streams partial summary updates into the summary tab as events arrive", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=27272727-2727-2727-2727-272727272727",
+  );
+  getJob.mockResolvedValueOnce({
+    created_at: "2026-05-04T16:20:00Z",
+    id: "27272727-2727-2727-2727-272727272727",
+    input_mode: "public_video",
+    source_url: "https://example.com/live-summary",
+    stage: "generating_transcript",
+    status: "running",
+    transcript_segment_count: 2,
+    transcript_status: "processing",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:20:00Z",
+      id: "27272727-2727-2727-2727-272727272727",
+      input_mode: "public_video",
+      source_url: "https://example.com/live-summary",
+      stage: "generating_transcript",
+      status: "running",
+      transcript_segment_count: 2,
+      transcript_status: "processing",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "AI output" })).toBeInTheDocument();
+  });
+
+  handlers?.onEvent?.({
+    event: "summary.partial",
+    data: {
+      job_id: "27272727-2727-2727-2727-272727272727",
+      summary: {
+        key_points_count: 2,
+        preview_text: "早期总结",
+        source_bullets: ["产品发布时间已确认", "下周将进行团队培训"],
+        source_text: "录音正在收敛到发布时间和培训安排。",
+        stage: "generating_transcript",
+        status: "processing",
+      },
+    },
+  });
+
+  await waitFor(() => {
+    expect(
+      screen.getByText("录音正在收敛到发布时间和培训安排。"),
+    ).toBeInTheDocument();
+  });
+
+  expect(screen.getByText("Live summary draft")).toBeInTheDocument();
+  expect(screen.getByText("产品发布时间已确认")).toBeInTheDocument();
+  expect(screen.getByText("下周将进行团队培训")).toBeInTheDocument();
 });
 
 test("ignores out-of-order status events for the same active job when refresh fails", async () => {
@@ -831,6 +1093,67 @@ test("shows transcript-ready timeline and transcript shell details for a hydrate
   expect(screen.getByText("Extractor: ffmpeg")).toBeInTheDocument();
 });
 
+test("shows generating-transcript progress copy before the first transcript lines arrive", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=18181818-1818-1818-1818-181818181818",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T13:35:00Z",
+    id: "18181818-1818-1818-1818-181818181818",
+    input_mode: "public_video",
+    source_url: "https://example.com/generating-transcript",
+    stage: "generating_transcript",
+    status: "running",
+    transcript_audio_artifact_path:
+      "var/transcripts/public-video/18181818-1818-1818-1818-181818181818.wav",
+    transcript_extractor: "ffmpeg",
+    transcript_status: "processing",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T13:35:00Z",
+      id: "18181818-1818-1818-1818-181818181818",
+      input_mode: "public_video",
+      source_url: "https://example.com/generating-transcript",
+      stage: "generating_transcript",
+      status: "running",
+      transcript_audio_artifact_path:
+        "var/transcripts/public-video/18181818-1818-1818-1818-181818181818.wav",
+      transcript_extractor: "ffmpeg",
+      transcript_status: "processing",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 18181818-1818-1818-1818-181818181818 is decoding the first transcript lines.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByText(
+      "Audio has been extracted and decoding is underway. The first transcript lines may take 30 to 90 seconds on longer videos.",
+    ),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(
+    screen.getByText(
+      "Audio artifact ready: var/transcripts/public-video/18181818-1818-1818-1818-181818181818.wav",
+    ),
+  ).toBeInTheDocument();
+});
+
 test("shows transcript-generated timeline and preview details for a hydrated job", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
@@ -954,6 +1277,104 @@ test("shows summary-generated timeline and summary preview details for a hydrate
   ).toBeInTheDocument();
 });
 
+test("shows detected audio language in the video info panel after hydration", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T14:00:00Z",
+    detected_language_code: "zh",
+    detected_language_name: "Chinese",
+    id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    input_mode: "public_video",
+    source_url: "https://example.com/chinese-video",
+    stage: "summary_generated",
+    status: "completed",
+    summary_source_text: "会议确定了发布时间。",
+    transcript_source_text: "大家好，欢迎来到今天的会议。",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T14:00:00Z",
+      detected_language_code: "zh",
+      detected_language_name: "Chinese",
+      id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+      input_mode: "public_video",
+      source_url: "https://example.com/chinese-video",
+      stage: "summary_generated",
+      status: "completed",
+      summary_source_text: "会议确定了发布时间。",
+      transcript_source_text: "大家好，欢迎来到今天的会议。",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByText("Chinese")).toBeInTheDocument();
+  });
+});
+
+test("hydrates cached summary translations and lets the user switch to them", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=cccccccc-cccc-cccc-cccc-cccccccccccc",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T14:30:00Z",
+    detected_language_code: "zh",
+    detected_language_name: "Chinese",
+    id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+    input_mode: "public_video",
+    source_url: "https://example.com/chinese-video",
+    stage: "summary_generated",
+    status: "completed",
+    summary_source_text: "会议确定了发布时间。",
+    summary_translations: { en: "The meeting confirmed the release date." },
+    transcript_source_text: "大家好，欢迎来到今天的会议。",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T14:30:00Z",
+      detected_language_code: "zh",
+      detected_language_name: "Chinese",
+      id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      input_mode: "public_video",
+      source_url: "https://example.com/chinese-video",
+      stage: "summary_generated",
+      status: "completed",
+      summary_source_text: "会议确定了发布时间。",
+      summary_translations: { en: "The meeting confirmed the release date." },
+      transcript_source_text: "大家好，欢迎来到今天的会议。",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByRole("tab", { name: "Summary" })).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Summary" }));
+
+  expect(screen.getByText("会议确定了发布时间。")).toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("Summary language"), {
+    target: { value: "en" },
+  });
+
+  expect(screen.getByText("The meeting confirmed the release date.")).toBeInTheDocument();
+});
+
 test("hydrates a revisited job from the URL query", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
@@ -1018,7 +1439,7 @@ test("hydrates a revisited job from the URL query", async () => {
   ).toHaveAttribute("src", "https://example.com/revisit-thumb.jpg");
   fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
   expect(
-    screen.getByText("Transcript is streaming provisional lines"),
+    screen.getByText("Transcript is streaming live lines"),
   ).toBeInTheDocument();
 });
 

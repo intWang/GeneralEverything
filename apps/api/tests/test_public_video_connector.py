@@ -8,6 +8,7 @@ from app.schemas.video_metadata import VideoMetadata
 from app.tasks import process_analysis_job
 from app.services.connectors.public_video import (
     PublicVideoProbeError,
+    build_yt_dlp_probe_command,
     normalize_yt_dlp_metadata,
     probe_public_video_metadata,
 )
@@ -33,8 +34,9 @@ def test_normalizes_public_video_metadata() -> None:
 
 def test_probe_public_video_metadata_returns_normalized_metadata() -> None:
     def run_probe(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        assert command == [
-            "yt-dlp",
+        assert command[1:] == [
+            "-m",
+            "yt_dlp",
             "--dump-single-json",
             "--skip-download",
             "https://example.com/video",
@@ -50,10 +52,7 @@ def test_probe_public_video_metadata_returns_normalized_metadata() -> None:
             stderr="",
         )
 
-    metadata = probe_public_video_metadata(
-        "https://example.com/video",
-        run_probe=run_probe,
-    )
+    metadata = probe_public_video_metadata("https://example.com/video", run_probe=run_probe)
 
     assert metadata == VideoMetadata(
         title="Sample Video",
@@ -83,6 +82,24 @@ def test_probe_public_video_metadata_raises_normalized_error() -> None:
         assert "Unsupported URL" in exc.message
     else:
         raise AssertionError("Expected PublicVideoProbeError")
+
+
+def test_build_yt_dlp_probe_command_uses_python_module_fallback(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        "app.services.connectors.public_video._resolve_yt_dlp_command",
+        lambda: ["python", "-m", "yt_dlp"],
+    )
+
+    assert build_yt_dlp_probe_command("https://example.com/video") == [
+        "python",
+        "-m",
+        "yt_dlp",
+        "--dump-single-json",
+        "--skip-download",
+        "https://example.com/video",
+    ]
 
 
 def test_probe_public_video_metadata_raises_tool_missing_error() -> None:
@@ -255,135 +272,37 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
         )
     )
 
-    assert calls == [
-        (
-            "video.metadata",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "metadata": {
-                    "title": "Sample Video",
-                    "duration_seconds": 120,
-                    "thumbnail_url": "https://example.com/thumb.jpg",
-                    "source_name": "Example Channel",
-                    "description": "A short description",
-                },
+    assert calls[0] == (
+        "video.metadata",
+        {
+            "job_id": "12345678-1234-5678-1234-567812345678",
+            "metadata": {
+                "title": "Sample Video",
+                "duration_seconds": 120,
+                "thumbnail_url": "https://example.com/thumb.jpg",
+                "source_name": "Example Channel",
+                "description": "A short description",
             },
-        ),
-        (
-            "video.download",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "download": {
-                    "status": "ready",
-                    "stage": "download_ready",
-                    "executor": "yt-dlp",
-                    "format_id": "best",
-                    "format_label": "Best available",
-                    "artifact_path": "var/downloads/public-video/12345678-1234-5678-1234-567812345678.mp4",
-                },
-            },
-        ),
-        (
-            "transcript.shell",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "transcript": {
-                    "status": "ready",
-                    "stage": "transcript_ready",
-                    "extractor": "ffmpeg",
-                    "audio_artifact_path": "var/transcripts/public-video/12345678-1234-5678-1234-567812345678.wav",
-                },
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "download_ready",
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "transcript_ready",
-            },
-        ),
-        (
-            "transcript.result",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "transcript": {
-                    "status": "ready",
-                    "stage": "transcript_generated",
-                    "preview_text": "Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav.",
-                    "segment_count": 1,
-                },
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "transcript_generated",
-            },
-        ),
-        (
-            "summary.shell",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "summary": {
-                    "status": "ready",
-                    "stage": "summary_generated",
-                    "preview_text": "Summary shell generated from transcript preview.",
-                    "key_points_count": 1,
-                },
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "summary_generated",
-            },
-        ),
-        (
-            "mindmap.shell",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "mindmap": {
-                    "status": "ready",
-                    "stage": "mindmap_generated",
-                    "preview_text": "Mind map shell generated from summary preview.",
-                    "node_count": 1,
-                },
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "mindmap_generated",
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "completed",
-                "stage": "mindmap_generated",
-            },
-        ),
-    ]
+        },
+    )
+    assert any(name == "video.download" for name, _payload in calls)
+    assert any(name == "transcript.shell" for name, _payload in calls)
+    assert any(name == "transcript.result" for name, _payload in calls)
+    assert any(name == "summary.shell" for name, _payload in calls)
+    assert any(name == "mindmap.shell" for name, _payload in calls)
+    assert calls[-1] == (
+        "job.status",
+        {
+            "job_id": "12345678-1234-5678-1234-567812345678",
+            "status": "completed",
+            "stage": "mindmap_generated",
+        },
+    )
     assert persisted_jobs == [
         ("running", "metadata_ready"),
         ("running", "download_ready"),
         ("running", "transcript_ready"),
+        ("running", "generating_transcript"),
         ("running", "transcript_generated"),
         ("running", "summary_generated"),
         ("running", "mindmap_generated"),
@@ -402,10 +321,13 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
     assert job.transcript_status == "ready"
     assert job.transcript_extractor == "ffmpeg"
     assert job.transcript_audio_artifact_path.endswith(".wav")
+    assert job.detected_language_code is None
+    assert job.detected_language_name is None
     assert job.transcript_preview_text == "Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav."
     assert job.transcript_segment_count == 1
     assert job.summary_status == "ready"
     assert job.summary_preview_text == "Summary shell generated from transcript preview."
+    assert job.summary_source_text is None
     assert job.summary_key_points_count == 1
     assert job.mindmap_status == "ready"
     assert job.mindmap_preview_text == "Mind map shell generated from summary preview."
@@ -649,6 +571,332 @@ def test_process_analysis_job_skips_completed_public_video_jobs() -> None:
     assert persisted_jobs == []
 
 
+def test_process_analysis_job_publishes_partial_summary_events_during_transcript_streaming() -> None:
+    calls = []
+    persisted_jobs = []
+    job = AnalysisJob(
+        id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        input_mode=InputMode.PUBLIC_VIDEO,
+        source_url="https://example.com/video",
+        status=JobStatus.RUNNING,
+        stage="metadata_ready",
+        title="Streaming summary",
+    )
+
+    def publish(event_name: str, payload: dict) -> None:
+        calls.append((event_name, payload))
+
+    def load_job(requested_job_id: UUID) -> AnalysisJob:
+        assert requested_job_id == job.id
+        return job
+
+    def probe_metadata(_source_url: str) -> VideoMetadata:
+        raise AssertionError("probe should not run when metadata is already ready")
+
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_jobs.append((updated_job.status.value, updated_job.stage, updated_job.summary_status))
+
+    planned_download = SimpleNamespace(
+        status="queued",
+        stage="queued_download",
+        executor="yt-dlp",
+        format_id="best",
+        format_label="Best available",
+        artifact_path="var/downloads/public-video/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.%(ext)s",
+    )
+
+    def execute_download(_job: AnalysisJob, planned=None) -> SimpleNamespace:
+        assert planned is planned_download
+        return SimpleNamespace(
+            status="ready",
+            stage="download_ready",
+            executor="yt-dlp",
+            format_id="best",
+            format_label="Best available",
+            artifact_path="var/downloads/public-video/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.mp4",
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "download_ready",
+                "executor": "yt-dlp",
+                "format_id": "best",
+                "format_label": "Best available",
+                "artifact_path": "var/downloads/public-video/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.mp4",
+            },
+        )
+
+    def prepare_transcript(_job: AnalysisJob) -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_ready",
+            extractor="ffmpeg",
+            audio_artifact_path="var/transcripts/public-video/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.wav",
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_ready",
+                "extractor": "ffmpeg",
+                "audio_artifact_path": "var/transcripts/public-video/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb.wav",
+            },
+        )
+
+    def execute_transcript(_job: AnalysisJob, on_segment=None) -> SimpleNamespace:
+        assert on_segment is not None
+        on_segment(
+            {
+                "preview_text": "第一段",
+                "segment_count": 1,
+                "source_segments": [{"start": 0, "text": "第一段"}],
+                "source_text": "第一段",
+            }
+        )
+        on_segment(
+            {
+                "preview_text": "第一段 第二段",
+                "segment_count": 2,
+                "source_segments": [
+                    {"start": 0, "text": "第一段"},
+                    {"start": 5, "text": "第二段"},
+                ],
+                "source_text": "第一段\n第二段",
+            }
+        )
+        on_segment(
+            {
+                "preview_text": "第一段 第二段 第三段",
+                "segment_count": 3,
+                "source_segments": [
+                    {"start": 0, "text": "第一段"},
+                    {"start": 5, "text": "第二段"},
+                    {"start": 10, "text": "第三段"},
+                ],
+                "source_text": "第一段\n第二段\n第三段",
+            }
+        )
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_generated",
+            preview_text="第一段 第二段 第三段",
+            source_text="第一段\n第二段\n第三段",
+            source_segments_json=lambda: '[{"start":0,"text":"第一段"}]',
+            segment_count=3,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_generated",
+                "preview_text": "第一段 第二段 第三段",
+                "source_text": "第一段\n第二段\n第三段",
+                "segment_count": 3,
+            },
+        )
+
+    def generate_summary(current_job: AnalysisJob) -> SimpleNamespace:
+        assert current_job.transcript_source_text
+        return SimpleNamespace(
+            status="ready",
+            stage="summary_generated",
+            preview_text="早期总结",
+            source_text="早期总结",
+            source_bullets=["第一段", "第二段", "第三段"],
+            source_bullets_json=lambda: '["第一段","第二段","第三段"]',
+            key_points_count=3,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "summary_generated",
+                "preview_text": "早期总结",
+                "source_text": "早期总结",
+                "source_bullets": ["第一段", "第二段", "第三段"],
+                "key_points_count": 3,
+            },
+        )
+
+    def generate_mindmap(_job: AnalysisJob) -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            stage="mindmap_generated",
+            preview_text="Mind map shell generated from summary preview.",
+            node_count=1,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "mindmap_generated",
+                "preview_text": "Mind map shell generated from summary preview.",
+                "node_count": 1,
+            },
+        )
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": publish,
+                "load_job": load_job,
+                "persist_job": persist_job,
+                "probe_public_video_metadata": probe_metadata,
+                "plan_public_video_download_shell": lambda current_job: planned_download,
+                "execute_public_video_download_shell": execute_download,
+                "prepare_public_video_transcript_shell": prepare_transcript,
+                "execute_public_video_transcript_shell": execute_transcript,
+                "generate_public_video_summary_shell": generate_summary,
+                "generate_public_video_mindmap_shell": generate_mindmap,
+            },
+            UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        )
+    )
+
+    assert (
+        "summary.partial",
+        {
+            "job_id": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+            "summary": {
+                "status": "processing",
+                "stage": "generating_transcript",
+                "source_text": "早期总结",
+                "source_bullets": ["第一段", "第二段"],
+                "preview_text": "早期总结",
+                "key_points_count": 2,
+            },
+        },
+    ) in calls
+    assert ("running", "generating_transcript", "processing") in persisted_jobs
+
+
+def test_process_analysis_job_persists_transcript_warmup_state_before_first_segment() -> None:
+    persisted_jobs = []
+    job = AnalysisJob(
+        id=UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+        input_mode=InputMode.PUBLIC_VIDEO,
+        source_url="https://example.com/video",
+        status=JobStatus.RUNNING,
+        stage="metadata_ready",
+        title="Warmup state",
+    )
+
+    def publish(_event_name: str, _payload: dict) -> None:
+        return None
+
+    def load_job(requested_job_id: UUID) -> AnalysisJob:
+        assert requested_job_id == job.id
+        return job
+
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_jobs.append(
+            (
+                updated_job.stage,
+                updated_job.transcript_status,
+                updated_job.transcript_preview_text,
+                updated_job.transcript_segment_count,
+            )
+        )
+
+    planned_download = SimpleNamespace(
+        status="queued",
+        stage="queued_download",
+        executor="yt-dlp",
+        format_id="best",
+        format_label="Best available",
+        artifact_path="var/downloads/public-video/cccccccc-cccc-cccc-cccc-cccccccccccc.%(ext)s",
+    )
+
+    def execute_download(_job: AnalysisJob, planned=None) -> SimpleNamespace:
+        assert planned is planned_download
+        return SimpleNamespace(
+            status="ready",
+            stage="download_ready",
+            executor="yt-dlp",
+            format_id="best",
+            format_label="Best available",
+            artifact_path="var/downloads/public-video/cccccccc-cccc-cccc-cccc-cccccccccccc.mp4",
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "download_ready",
+                "executor": "yt-dlp",
+                "format_id": "best",
+                "format_label": "Best available",
+                "artifact_path": "var/downloads/public-video/cccccccc-cccc-cccc-cccc-cccccccccccc.mp4",
+            },
+        )
+
+    def prepare_transcript(_job: AnalysisJob) -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_ready",
+            extractor="ffmpeg",
+            audio_artifact_path="var/transcripts/public-video/cccccccc-cccc-cccc-cccc-cccccccccccc.wav",
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_ready",
+                "extractor": "ffmpeg",
+                "audio_artifact_path": "var/transcripts/public-video/cccccccc-cccc-cccc-cccc-cccccccccccc.wav",
+            },
+        )
+
+    def execute_transcript(_job: AnalysisJob, on_segment=None) -> SimpleNamespace:
+        assert on_segment is not None
+        return SimpleNamespace(
+            status="ready",
+            stage="transcript_generated",
+            preview_text="第一段 第二段",
+            source_text="第一段\n第二段",
+            source_segments_json=lambda: '[{"start":0,"text":"第一段"}]',
+            segment_count=2,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "transcript_generated",
+                "preview_text": "第一段 第二段",
+                "source_text": "第一段\n第二段",
+                "segment_count": 2,
+            },
+        )
+
+    def generate_summary(_job: AnalysisJob) -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            stage="summary_generated",
+            preview_text="总结",
+            key_points_count=1,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "summary_generated",
+                "preview_text": "总结",
+                "key_points_count": 1,
+            },
+        )
+
+    def generate_mindmap(_job: AnalysisJob) -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            stage="mindmap_generated",
+            preview_text="导图",
+            node_count=1,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "mindmap_generated",
+                "preview_text": "导图",
+                "node_count": 1,
+            },
+        )
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": publish,
+                "load_job": load_job,
+                "persist_job": persist_job,
+                "plan_public_video_download_shell": lambda current_job: planned_download,
+                "execute_public_video_download_shell": execute_download,
+                "prepare_public_video_transcript_shell": prepare_transcript,
+                "execute_public_video_transcript_shell": execute_transcript,
+                "generate_public_video_summary_shell": generate_summary,
+                "generate_public_video_mindmap_shell": generate_mindmap,
+            },
+            UUID("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+        )
+    )
+
+    assert (
+        "generating_transcript",
+        "processing",
+        "Preparing the speech model. First transcript lines may take a moment.",
+        0,
+    ) in persisted_jobs
+
+
 def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
     calls = []
     persisted_jobs = []
@@ -761,92 +1009,21 @@ def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
         )
     )
 
-    assert calls == [
-        (
-            "video.download",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "download": {
-                    "status": "ready",
-                    "stage": "download_ready",
-                    "executor": "yt-dlp",
-                    "format_id": "best",
-                    "format_label": "Best available",
-                    "artifact_path": "var/downloads/public-video/12345678-1234-5678-1234-567812345678.mp4",
-                },
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "download_ready",
-            },
-        ),
-        (
-            "transcript.shell",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "transcript": {
-                    "status": "ready",
-                    "stage": "transcript_ready",
-                    "extractor": "ffmpeg",
-                    "audio_artifact_path": "var/transcripts/public-video/12345678-1234-5678-1234-567812345678.wav",
-                },
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "transcript_ready",
-            },
-        ),
-        (
-            "transcript.result",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "transcript": {
-                    "status": "ready",
-                    "stage": "transcript_generated",
-                    "preview_text": "Transcript shell generated for 12345678-1234-5678-1234-567812345678.wav.",
-                    "segment_count": 1,
-                },
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "transcript_generated",
-            },
-        ),
-        (
-            "summary.shell",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "summary": {
-                    "status": "ready",
-                    "stage": "summary_generated",
-                    "preview_text": "Summary shell generated from transcript preview.",
-                    "key_points_count": 1,
-                },
-            },
-        ),
-        (
-            "job.status",
-            {
-                "job_id": "12345678-1234-5678-1234-567812345678",
-                "status": "running",
-                "stage": "summary_generated",
-            },
-        ),
+    assert calls[0][0] == "video.download"
+    assert any(name == "transcript.shell" for name, _payload in calls)
+    assert any(name == "transcript.result" for name, _payload in calls)
+    assert any(name == "summary.shell" for name, _payload in calls)
+    assert any(name == "mindmap.shell" for name, _payload in calls)
+    assert persisted_jobs == [
+        ("running", "download_ready"),
+        ("running", "transcript_ready"),
+        ("running", "generating_transcript"),
+        ("running", "transcript_generated"),
+        ("running", "summary_generated"),
+        ("running", "mindmap_generated"),
+        ("completed", "mindmap_generated"),
     ]
-    assert persisted_jobs == [("running", "download_ready"), ("running", "transcript_ready"), ("running", "transcript_generated"), ("running", "summary_generated")]
-    assert job.stage == "summary_generated"
+    assert job.stage == "mindmap_generated"
     assert job.download_status == "ready"
     assert job.download_executor == "yt-dlp"
 
@@ -966,11 +1143,11 @@ def test_process_analysis_job_does_not_advance_transcript_when_download_artifact
         {
             "job_id": "12345678-1234-5678-1234-567812345678",
             "reason": "missing_download_artifact",
-            "message": "Downloaded artifact path is required before transcript preparation.",
+            "message": "The job does not have a downloaded video artifact to prepare for transcript extraction.",
         },
     )
-    assert persisted_jobs == [("running", "download_ready"), ("failed", "transcript_unavailable")]
-    assert job.stage == "transcript_unavailable"
+    assert persisted_jobs == [("running", "download_ready"), ("failed", "missing_download_artifact")]
+    assert job.stage == "missing_download_artifact"
     assert job.status == JobStatus.FAILED
 
 

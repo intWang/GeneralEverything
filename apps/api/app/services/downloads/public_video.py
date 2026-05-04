@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.util
 from pathlib import Path
+import shutil
 import subprocess
+import sys
 
 
 DEFAULT_DOWNLOAD_ROOT = Path("var/downloads/public-video")
@@ -35,6 +38,17 @@ class PublicVideoDownloadError(RuntimeError):
         self.message = message
 
 
+def _resolve_yt_dlp_command() -> list[str]:
+    system_binary = shutil.which("yt-dlp")
+    if system_binary:
+        return [system_binary]
+
+    if importlib.util.find_spec("yt_dlp") is not None:
+        return [sys.executable, "-m", "yt_dlp"]
+
+    return ["yt-dlp"]
+
+
 def plan_public_video_download_shell(job: object, download_root: Path | None = None) -> PublicVideoDownloadShell:
     root = download_root or DEFAULT_DOWNLOAD_ROOT
     job_id = str(getattr(job, "id", "unknown"))
@@ -64,7 +78,7 @@ def execute_public_video_download_shell(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     command = [
-        "yt-dlp",
+        *_resolve_yt_dlp_command(),
         "--no-progress",
         "--newline",
         "-f",

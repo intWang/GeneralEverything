@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
+import json
 
 from sqlalchemy import DateTime, Enum, String, Text, Uuid, func, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -42,10 +43,18 @@ class AnalysisJob(Base):
     transcript_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     transcript_extractor: Mapped[str | None] = mapped_column(String(32), nullable=True)
     transcript_audio_artifact_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detected_language_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    detected_language_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
     transcript_preview_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript_source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript_source_segments_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transcript_translations_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_segment_count: Mapped[int | None] = mapped_column(nullable=True)
     summary_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     summary_preview_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_source_bullets_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_translations_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_key_points_count: Mapped[int | None] = mapped_column(nullable=True)
     mindmap_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     mindmap_preview_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -67,3 +76,24 @@ class AnalysisJob(Base):
         server_default=func.current_timestamp(),
         nullable=False,
     )
+
+    @property
+    def transcript_translations(self) -> dict[str, str] | None:
+        if not self.transcript_translations_json:
+            return None
+
+        return json.loads(self.transcript_translations_json)
+
+    @property
+    def summary_source_bullets(self) -> list[str] | None:
+        if not self.summary_source_bullets_json:
+            return None
+
+        return json.loads(self.summary_source_bullets_json)
+
+    @property
+    def summary_translations(self) -> dict[str, str] | None:
+        if not self.summary_translations_json:
+            return None
+
+        return json.loads(self.summary_translations_json)

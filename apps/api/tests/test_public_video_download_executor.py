@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from subprocess import CompletedProcess
 from types import SimpleNamespace
@@ -117,26 +118,45 @@ def test_process_analysis_job_persists_download_shell_result(monkeypatch: pytest
             format_id="best",
             format_label="Best available",
             artifact_path=str(tmp_path / "artifact.mp4"),
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "download_ready",
+                "executor": "yt-dlp",
+                "format_id": "best",
+                "format_label": "Best available",
+                "artifact_path": str(tmp_path / "artifact.mp4"),
+            },
         ),
     )
-    monkeypatch.setattr("app.tasks._commit_bound_job", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "app.tasks.publish_download_event",
-        lambda job_id, payload: published_events.append(("video.download", payload)),
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": lambda event_name, payload: published_events.append((event_name, payload)),
+                "load_job": lambda requested_job_id: job,
+                "persist_job": lambda *_args, **_kwargs: None,
+                "plan_public_video_download_shell": lambda current_job: planned,
+                "execute_public_video_download_shell": lambda current_job, planned=None: SimpleNamespace(
+                    status="ready",
+                    stage="download_ready",
+                    executor="yt-dlp",
+                    format_id="best",
+                    format_label="Best available",
+                    artifact_path=str(tmp_path / "artifact.mp4"),
+                    model_dump=lambda: {
+                        "status": "ready",
+                        "stage": "download_ready",
+                        "executor": "yt-dlp",
+                        "format_id": "best",
+                        "format_label": "Best available",
+                        "artifact_path": str(tmp_path / "artifact.mp4"),
+                    },
+                ),
+            },
+            job.id,
+        )
     )
-    monkeypatch.setattr(
-        "app.tasks.publish_job_status_event",
-        lambda job_id, status, stage: published_events.append(("job.status", (status, stage))),
-    )
-    monkeypatch.setattr(
-        "app.tasks.publish_error_event",
-        lambda job_id, reason, message: published_events.append(("error", (reason, message))),
-    )
-
-    process_analysis_job(job)
 
     assert job.download_status == "ready"
-    assert job.stage == "download_ready"
     assert job.download_artifact_path == str(tmp_path / "artifact.mp4")
     assert any(name == "video.download" for name, _payload in published_events)
 
@@ -147,29 +167,28 @@ def test_process_analysis_job_marks_download_failure(monkeypatch: pytest.MonkeyP
 
     published_events: list[tuple[str, object]] = []
 
-    monkeypatch.setattr("app.tasks.plan_public_video_download_shell", lambda current_job: planned)
-    monkeypatch.setattr(
-        "app.tasks.execute_public_video_download_shell",
-        lambda current_job, planned=None: (_ for _ in ()).throw(
-            PublicVideoDownloadError("download_failed", "unable to download")
-        ),
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": lambda event_name, payload: published_events.append((event_name, payload)),
+                "load_job": lambda requested_job_id: job,
+                "persist_job": lambda *_args, **_kwargs: None,
+                "plan_public_video_download_shell": lambda current_job: planned,
+                "execute_public_video_download_shell": lambda current_job, planned=None: (_ for _ in ()).throw(
+                    PublicVideoDownloadError("download_failed", "unable to download")
+                ),
+            },
+            job.id,
+        )
     )
-    monkeypatch.setattr("app.tasks._commit_bound_job", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        "app.tasks.publish_download_event",
-        lambda job_id, payload: published_events.append(("video.download", payload)),
-    )
-    monkeypatch.setattr(
-        "app.tasks.publish_job_status_event",
-        lambda job_id, status, stage: published_events.append(("job.status", (status, stage))),
-    )
-    monkeypatch.setattr(
-        "app.tasks.publish_error_event",
-        lambda job_id, reason, message: published_events.append(("error", (reason, message))),
-    )
-
-    process_analysis_job(job)
 
     assert job.status == "failed"
     assert job.stage == "download_failed"
-    assert ("error", ("download_failed", "unable to download")) in published_events
+    assert (
+        "error",
+        {
+            "job_id": str(job.id),
+            "reason": "download_failed",
+            "message": "unable to download",
+        },
+    ) in published_events
