@@ -9,6 +9,8 @@ export type JobStage =
   | "download_ready"
   | "transcript_ready"
   | "transcript_generated"
+  | "summary_generated"
+  | "mindmap_generated"
   | "generating_transcript"
   | "building_summary"
   | "building_mindmap"
@@ -20,6 +22,9 @@ export type JobRecord = {
   duration_seconds: number | null;
   id: string;
   input_mode: InputMode;
+  mindmap_node_count?: number | null;
+  mindmap_preview_text?: string | null;
+  mindmap_status?: string | null;
   source_name: string | null;
   source_url: string;
   stage: JobStage;

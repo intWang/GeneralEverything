@@ -3,6 +3,8 @@ import type { TabShellState } from "./summary-tab";
 
 type MindMapTabProps = {
   branches?: readonly string[];
+  nodeCount?: number | null;
+  previewText?: string | null;
   shellState?: TabShellState;
 };
 
@@ -50,6 +52,8 @@ const SHELL_COPY: Record<
 
 export function MindMapTab({
   branches = DEFAULT_BRANCHES,
+  nodeCount,
+  previewText,
   shellState = "queued",
 }: MindMapTabProps) {
   const copy = SHELL_COPY[shellState];
@@ -63,6 +67,14 @@ export function MindMapTab({
       <p className={styles.tabSectionBody}>
         {copy.body}
       </p>
+      {nodeCount !== null && nodeCount !== undefined ? (
+        <ul className={styles.tabHintList}>
+          <li className={styles.tabHintItem}>Mind map nodes ready: {nodeCount}</li>
+          {previewText ? (
+            <li className={styles.tabHintItem}>Preview: {previewText}</li>
+          ) : null}
+        </ul>
+      ) : null}
       <ul className={styles.tabHintList}>
         {branches.map((branch) => (
           <li className={styles.tabHintItem} key={branch}>

@@ -34,6 +34,9 @@ class JobResponse(BaseModel):
     summary_status: str | None
     summary_preview_text: str | None
     summary_key_points_count: int | None
+    mindmap_status: str | None
+    mindmap_preview_text: str | None
+    mindmap_node_count: int | None
     status: JobStatus
     stage: str
     created_at: datetime

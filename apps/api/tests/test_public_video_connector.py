@@ -223,6 +223,20 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
             },
         )
 
+    def generate_mindmap(_job: AnalysisJob) -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            stage="mindmap_generated",
+            preview_text="Mind map shell generated from summary preview.",
+            node_count=1,
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "mindmap_generated",
+                "preview_text": "Mind map shell generated from summary preview.",
+                "node_count": 1,
+            },
+        )
+
     asyncio.run(
         process_analysis_job(
             {
@@ -235,6 +249,7 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
                 "prepare_public_video_transcript_shell": prepare_transcript,
                 "execute_public_video_transcript_shell": execute_transcript,
                 "generate_public_video_summary_shell": generate_summary,
+                "generate_public_video_mindmap_shell": generate_mindmap,
             },
             UUID("12345678-1234-5678-1234-567812345678"),
         )
@@ -336,6 +351,26 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
                 "stage": "summary_generated",
             },
         ),
+        (
+            "mindmap.shell",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "mindmap": {
+                    "status": "ready",
+                    "stage": "mindmap_generated",
+                    "preview_text": "Mind map shell generated from summary preview.",
+                    "node_count": 1,
+                },
+            },
+        ),
+        (
+            "job.status",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "status": "running",
+                "stage": "mindmap_generated",
+            },
+        ),
     ]
     assert persisted_jobs == [
         ("running", "metadata_ready"),
@@ -343,6 +378,7 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
         ("running", "transcript_ready"),
         ("running", "transcript_generated"),
         ("running", "summary_generated"),
+        ("running", "mindmap_generated"),
     ]
     assert job.title == "Sample Video"
     assert job.duration_seconds == 120
@@ -362,8 +398,11 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
     assert job.summary_status == "ready"
     assert job.summary_preview_text == "Summary shell generated from transcript preview."
     assert job.summary_key_points_count == 1
+    assert job.mindmap_status == "ready"
+    assert job.mindmap_preview_text == "Mind map shell generated from summary preview."
+    assert job.mindmap_node_count == 1
     assert job.status == JobStatus.RUNNING
-    assert job.stage == "summary_generated"
+    assert job.stage == "mindmap_generated"
 
 
 def test_process_analysis_job_publishes_normalized_probe_error() -> None:

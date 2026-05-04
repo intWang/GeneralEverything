@@ -25,6 +25,11 @@ from app.services.summaries.public_video import (
     PublicVideoSummaryShellError,
     generate_public_video_summary_shell,
 )
+from app.services.mindmaps.public_video import (
+    PublicVideoMindMapShell,
+    PublicVideoMindMapShellError,
+    generate_public_video_mindmap_shell,
+)
 from sqlalchemy.orm import object_session
 
 
@@ -113,6 +118,23 @@ def _mark_public_video_summary_failure(job, exc: PublicVideoSummaryShellError) -
     job.summary_status = "failed"
 
 
+def _apply_public_video_mindmap_shell(
+    job,
+    mindmap_shell: PublicVideoMindMapShell,
+) -> None:
+    job.mindmap_status = mindmap_shell.status
+    job.mindmap_preview_text = mindmap_shell.preview_text
+    job.mindmap_node_count = mindmap_shell.node_count
+    job.status = JobStatus.RUNNING
+    job.stage = mindmap_shell.stage
+
+
+def _mark_public_video_mindmap_failure(job, exc: PublicVideoMindMapShellError) -> None:
+    job.status = JobStatus.FAILED
+    job.stage = exc.reason
+    job.mindmap_status = "failed"
+
+
 def _persist_loaded_job(job) -> None:
     session = object_session(job)
     if session is None:
@@ -186,14 +208,14 @@ async def _execute_public_video_download(
         },
     )
 
-    generate_summary_shell = (
-        ctx.get("generate_public_video_summary_shell")
-        or generate_public_video_summary_shell
+    prepare_transcript_shell = (
+        ctx.get("prepare_public_video_transcript_shell")
+        or prepare_public_video_transcript_shell
     )
     try:
-        summary_shell = await _resolve(generate_summary_shell(job))
-    except PublicVideoSummaryShellError as exc:
-        _mark_public_video_summary_failure(job, exc)
+        transcript_shell = await _resolve(prepare_transcript_shell(job))
+    except PublicVideoTranscriptShellError as exc:
+        _mark_public_video_transcript_failure(job, exc)
         await _resolve(persist_job(job))
         await _publish_event(
             publisher,
@@ -206,12 +228,12 @@ async def _execute_public_video_download(
         )
         return
 
-    _apply_public_video_summary_shell(job, summary_shell)
+    _apply_public_video_transcript_shell(job, transcript_shell)
     await _resolve(persist_job(job))
     await _publish_event(
         publisher,
-        "summary.shell",
-        {"job_id": str(job_id), "summary": summary_shell.model_dump()},
+        "transcript.shell",
+        {"job_id": str(job_id), "transcript": transcript_shell.model_dump()},
     )
     await _publish_event(
         publisher,
@@ -260,14 +282,14 @@ async def _execute_public_video_download(
         },
     )
 
-    prepare_transcript_shell = (
-        ctx.get("prepare_public_video_transcript_shell")
-        or prepare_public_video_transcript_shell
+    generate_summary_shell = (
+        ctx.get("generate_public_video_summary_shell")
+        or generate_public_video_summary_shell
     )
     try:
-        transcript_shell = await _resolve(prepare_transcript_shell(job))
-    except PublicVideoTranscriptShellError as exc:
-        _mark_public_video_transcript_failure(job, exc)
+        summary_shell = await _resolve(generate_summary_shell(job))
+    except PublicVideoSummaryShellError as exc:
+        _mark_public_video_summary_failure(job, exc)
         await _resolve(persist_job(job))
         await _publish_event(
             publisher,
@@ -280,12 +302,49 @@ async def _execute_public_video_download(
         )
         return
 
-    _apply_public_video_transcript_shell(job, transcript_shell)
+    _apply_public_video_summary_shell(job, summary_shell)
     await _resolve(persist_job(job))
     await _publish_event(
         publisher,
-        "transcript.shell",
-        {"job_id": str(job_id), "transcript": transcript_shell.model_dump()},
+        "summary.shell",
+        {"job_id": str(job_id), "summary": summary_shell.model_dump()},
+    )
+    await _publish_event(
+        publisher,
+        "job.status",
+        {
+            "job_id": str(job_id),
+            "status": job.status.value,
+            "stage": job.stage,
+        },
+    )
+
+    generate_mindmap_shell = (
+        ctx.get("generate_public_video_mindmap_shell")
+        or generate_public_video_mindmap_shell
+    )
+    try:
+        mindmap_shell = await _resolve(generate_mindmap_shell(job))
+    except PublicVideoMindMapShellError as exc:
+        _mark_public_video_mindmap_failure(job, exc)
+        await _resolve(persist_job(job))
+        await _publish_event(
+            publisher,
+            "error",
+            {
+                "job_id": str(job_id),
+                "reason": exc.reason,
+                "message": exc.message,
+            },
+        )
+        return
+
+    _apply_public_video_mindmap_shell(job, mindmap_shell)
+    await _resolve(persist_job(job))
+    await _publish_event(
+        publisher,
+        "mindmap.shell",
+        {"job_id": str(job_id), "mindmap": mindmap_shell.model_dump()},
     )
     await _publish_event(
         publisher,

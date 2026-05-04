@@ -18,6 +18,9 @@ type AITabsProps = {
   activeJobId?: string;
   jobStage?: string;
   jobStatus?: JobStatus;
+  mindmapNodeCount?: JobRecord["mindmap_node_count"];
+  mindmapPreviewText?: JobRecord["mindmap_preview_text"];
+  mindmapStatus?: JobRecord["mindmap_status"];
   summaryKeyPointsCount?: JobRecord["summary_key_points_count"];
   summaryPreviewText?: JobRecord["summary_preview_text"];
   summaryStatus?: JobRecord["summary_status"];
@@ -139,6 +142,9 @@ export function AITabs({
   activeJobId,
   jobStage,
   jobStatus = "queued",
+  mindmapNodeCount,
+  mindmapPreviewText,
+  mindmapStatus,
   summaryKeyPointsCount,
   summaryPreviewText,
   summaryStatus,
@@ -224,7 +230,21 @@ export function AITabs({
           />
         ) : null}
         {activeTab === "Mind Map" ? (
-          <MindMapTab shellState={shellStates.mindmap} />
+          <MindMapTab
+            branches={
+              jobStage === "mindmap_generated"
+                ? [
+                    "Summary backbone",
+                    "Key evidence clusters",
+                    "Actionable takeaways",
+                    "Follow-up questions",
+                  ]
+                : undefined
+            }
+            nodeCount={mindmapNodeCount}
+            previewText={mindmapPreviewText}
+            shellState={mindmapStatus === "failed" ? "failed" : shellStates.mindmap}
+          />
         ) : null}
         {activeTab === "Ask AI" ? (
           <AskAiTab
