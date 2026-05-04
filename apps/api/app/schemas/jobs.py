@@ -21,6 +21,11 @@ class JobResponse(BaseModel):
     thumbnail_url: HttpUrl | None
     source_name: str | None
     description: str | None
+    download_status: str | None
+    download_executor: str | None
+    download_format_id: str | None
+    download_format_label: str | None
+    download_artifact_path: str | None
     status: JobStatus
     stage: str
     created_at: datetime

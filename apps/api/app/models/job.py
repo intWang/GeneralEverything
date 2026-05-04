@@ -34,6 +34,11 @@ class AnalysisJob(Base):
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_name: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    download_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    download_executor: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    download_format_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    download_format_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    download_artifact_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, name="job_status"),
         default=JobStatus.QUEUED,

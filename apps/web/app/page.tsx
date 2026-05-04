@@ -16,6 +16,93 @@ import type { CreateJobResponse } from "../lib/api";
 
 const KNOWN_JOB_STATUSES = ["queued", "running", "failed", "completed"] as const;
 
+function getTimelineState(jobState: JobRecord) {
+  if (jobState.status === "failed") {
+    return "error" as const;
+  }
+
+  if (jobState.status === "completed") {
+    return "complete" as const;
+  }
+
+  return "active" as const;
+}
+
+function buildTimelineItems(jobState: JobRecord) {
+  const primaryState = getTimelineState(jobState);
+  const downloadState =
+    jobState.stage === "download_ready" || jobState.status === "completed"
+      ? "complete"
+      : jobState.stage === "queued_download" || jobState.stage === "downloading"
+        ? jobState.status === "failed"
+          ? "error"
+          : "active"
+        : jobState.status === "failed"
+          ? "error"
+          : "pending";
+  const aiState =
+    jobState.status === "completed"
+      ? "complete"
+      : jobState.status === "failed"
+        ? "error"
+        : "pending";
+
+  const primaryDetailByStage: Record<string, string> = {
+    queued:
+      "The source has been accepted and is waiting for the first metadata probe.",
+    metadata_ready:
+      "The probe finished and the saved video shell now has title, duration, source, and thumbnail details.",
+    queued_download:
+      "Metadata is locked in and the job is queued for the download phase.",
+    downloading:
+      "The download shell is active, so the backend can progress into media retrieval next.",
+    download_ready:
+      "The download shell has been prepared and the job is ready for the next media-processing step.",
+  };
+
+  const primaryLabelByStage: Record<string, string> = {
+    queued: `Job ${jobState.id} is queued for analysis.`,
+    metadata_ready: `Job ${jobState.id} finished metadata probing.`,
+    queued_download: `Job ${jobState.id} is queued for download preparation.`,
+    downloading: `Job ${jobState.id} is progressing through the download shell.`,
+    download_ready: `Job ${jobState.id} is ready for the download step.`,
+  };
+
+  return [
+    {
+      label:
+        primaryLabelByStage[jobState.stage] ??
+        `Job ${jobState.id} is ${jobState.status} for analysis.`,
+      detail:
+        primaryDetailByStage[jobState.stage] ??
+        "The backend is coordinating the saved analysis shell with live stage updates.",
+      state: primaryState,
+    },
+    {
+      label: "Download stage shell",
+      detail:
+        jobState.stage === "metadata_ready"
+          ? "Metadata is ready, so the workflow can now transition into download preparation."
+          : jobState.stage === "queued_download"
+            ? "The backend has queued the download shell and is preparing the next media step."
+            : jobState.stage === "downloading"
+              ? "The download shell is in progress before real media retrieval is wired in."
+              : jobState.stage === "download_ready"
+                ? "The download shell is complete, so the job is ready for downstream processing."
+                : "The download shell will unlock after the metadata probe completes.",
+      state: downloadState,
+    },
+    {
+      label: "Transcript and AI output are pending",
+      detail:
+        jobState.stage === "download_ready"
+          ? "The job has reached the handoff point for later transcript, summary, mind map, and Ask AI stages."
+          : "Transcript, summary, mind map, and Ask AI will activate after the download stage is ready.",
+      state: aiState,
+    },
+  ];
+}
+
 export default function HomePage() {
   const [inputMode, setInputMode] = useState<InputMode>("public_video");
   const [jobState, setJobState] = useState<JobRecord | null>(null);
@@ -229,25 +316,7 @@ export default function HomePage() {
               {loadError ? (
                 <p className={styles.formFeedback}>{loadError}</p>
               ) : null}
-              <StatusTimeline
-                items={[
-                  {
-                    label: `Job ${jobState.id} is ${jobState.status} for analysis.`,
-                    detail: "Backend events will replace this shell with live stage updates.",
-                    state:
-                      jobState.status === "failed"
-                        ? "error"
-                        : jobState.status === "completed"
-                          ? "complete"
-                          : "active",
-                  },
-                  {
-                    label: "Transcript and AI output are pending",
-                    detail: "Task 10 will progressively render the analysis panels.",
-                    state: "pending",
-                  },
-                ]}
-              />
+              <StatusTimeline items={buildTimelineItems(jobState)} />
               <VideoInfoPanel
                 description={jobState.description}
                 durationSeconds={jobState.duration_seconds}

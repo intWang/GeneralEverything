@@ -1,5 +1,6 @@
 import asyncio
 import subprocess
+from types import SimpleNamespace
 from uuid import UUID
 
 from app.models.job import AnalysisJob, InputMode, JobStatus
@@ -151,6 +152,34 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
     def persist_job(updated_job: AnalysisJob) -> None:
         persisted_jobs.append((updated_job.status.value, updated_job.stage))
 
+    planned_download = SimpleNamespace(
+        status="queued",
+        stage="queued_download",
+        executor="yt-dlp",
+        format_id="best",
+        format_label="Best available",
+        artifact_path="var/downloads/public-video/12345678-1234-5678-1234-567812345678.%(ext)s",
+    )
+
+    def execute_download(_job: AnalysisJob, planned=None) -> SimpleNamespace:
+        assert planned is planned_download
+        return SimpleNamespace(
+            status="ready",
+            stage="download_ready",
+            executor="yt-dlp",
+            format_id="best",
+            format_label="Best available",
+            artifact_path="var/downloads/public-video/12345678-1234-5678-1234-567812345678.mp4",
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "download_ready",
+                "executor": "yt-dlp",
+                "format_id": "best",
+                "format_label": "Best available",
+                "artifact_path": "var/downloads/public-video/12345678-1234-5678-1234-567812345678.mp4",
+            },
+        )
+
     asyncio.run(
         process_analysis_job(
             {
@@ -158,6 +187,8 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
                 "load_job": load_job,
                 "persist_job": persist_job,
                 "probe_public_video_metadata": probe_metadata,
+                "plan_public_video_download_shell": lambda current_job: planned_download,
+                "execute_public_video_download_shell": execute_download,
             },
             UUID("12345678-1234-5678-1234-567812345678"),
         )
@@ -174,6 +205,20 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
                     "thumbnail_url": "https://example.com/thumb.jpg",
                     "source_name": "Example Channel",
                     "description": "A short description",
+                },
+            },
+        ),
+        (
+            "video.download",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "download": {
+                    "status": "ready",
+                    "stage": "download_ready",
+                    "executor": "yt-dlp",
+                    "format_id": "best",
+                    "format_label": "Best available",
+                    "artifact_path": "var/downloads/public-video/12345678-1234-5678-1234-567812345678.mp4",
                 },
             },
         ),
@@ -195,6 +240,11 @@ def test_process_analysis_job_publishes_probed_metadata_event() -> None:
     assert job.thumbnail_url == "https://example.com/thumb.jpg"
     assert job.source_name == "Example Channel"
     assert job.description == "A short description"
+    assert job.download_status == "ready"
+    assert job.download_executor == "yt-dlp"
+    assert job.download_format_id == "best"
+    assert job.download_format_label == "Best available"
+    assert job.download_artifact_path.endswith(".mp4")
     assert job.status == JobStatus.RUNNING
     assert job.stage == "download_ready"
 
@@ -278,6 +328,34 @@ def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
     def persist_job(updated_job: AnalysisJob) -> None:
         persisted_jobs.append((updated_job.status.value, updated_job.stage))
 
+    planned_download = SimpleNamespace(
+        status="queued",
+        stage="queued_download",
+        executor="yt-dlp",
+        format_id="best",
+        format_label="Best available",
+        artifact_path="var/downloads/public-video/12345678-1234-5678-1234-567812345678.%(ext)s",
+    )
+
+    def execute_download(_job: AnalysisJob, planned=None) -> SimpleNamespace:
+        assert planned is planned_download
+        return SimpleNamespace(
+            status="ready",
+            stage="download_ready",
+            executor="yt-dlp",
+            format_id="best",
+            format_label="Best available",
+            artifact_path="var/downloads/public-video/12345678-1234-5678-1234-567812345678.mp4",
+            model_dump=lambda: {
+                "status": "ready",
+                "stage": "download_ready",
+                "executor": "yt-dlp",
+                "format_id": "best",
+                "format_label": "Best available",
+                "artifact_path": "var/downloads/public-video/12345678-1234-5678-1234-567812345678.mp4",
+            },
+        )
+
     asyncio.run(
         process_analysis_job(
             {
@@ -285,12 +363,28 @@ def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
                 "load_job": load_job,
                 "persist_job": persist_job,
                 "probe_public_video_metadata": probe_metadata,
+                "plan_public_video_download_shell": lambda current_job: planned_download,
+                "execute_public_video_download_shell": execute_download,
             },
             UUID("12345678-1234-5678-1234-567812345678"),
         )
     )
 
     assert calls == [
+        (
+            "video.download",
+            {
+                "job_id": "12345678-1234-5678-1234-567812345678",
+                "download": {
+                    "status": "ready",
+                    "stage": "download_ready",
+                    "executor": "yt-dlp",
+                    "format_id": "best",
+                    "format_label": "Best available",
+                    "artifact_path": "var/downloads/public-video/12345678-1234-5678-1234-567812345678.mp4",
+                },
+            },
+        ),
         (
             "job.status",
             {
@@ -302,6 +396,8 @@ def test_process_analysis_job_skips_reprobe_when_metadata_ready() -> None:
     ]
     assert persisted_jobs == [("running", "download_ready")]
     assert job.stage == "download_ready"
+    assert job.download_status == "ready"
+    assert job.download_executor == "yt-dlp"
 
 
 def test_process_analysis_job_skips_reprobe_when_job_failed() -> None:

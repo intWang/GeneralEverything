@@ -82,6 +82,11 @@ def test_create_job_returns_pending_job(tmp_path) -> None:
     assert body["thumbnail_url"] == "https://example.com/thumb.jpg"
     assert body["source_name"] == "Example Channel"
     assert body["description"] == "A short description"
+    assert body["download_status"] is None
+    assert body["download_executor"] is None
+    assert body["download_format_id"] is None
+    assert body["download_format_label"] is None
+    assert body["download_artifact_path"] is None
 
     with testing_session() as session:
         persisted_job = session.query(AnalysisJob).one()
@@ -157,7 +162,7 @@ def test_create_job_returns_failed_shell_when_probe_fails(tmp_path) -> None:
 
 
 def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
-    client, _testing_session = make_test_client(tmp_path)
+    client, testing_session = make_test_client(tmp_path)
 
     original_probe = jobs_routes.probe_public_video_metadata
     jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
@@ -175,6 +180,15 @@ def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
         )
         job_id = created.json()["id"]
 
+        with testing_session() as session:
+            persisted_job = session.query(AnalysisJob).one()
+            persisted_job.download_status = "planned"
+            persisted_job.download_executor = "yt-dlp"
+            persisted_job.download_format_id = "best"
+            persisted_job.download_format_label = "best-available"
+            persisted_job.download_artifact_path = "artifacts/downloads/demo/sample-video.mp4"
+            session.commit()
+
         response = client.get(f"/api/jobs/{job_id}")
     finally:
         jobs_routes.probe_public_video_metadata = original_probe
@@ -188,6 +202,11 @@ def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
     assert body["stage"] == "metadata_ready"
     assert body["title"] == "Sample Video"
     assert body["thumbnail_url"] == "https://example.com/thumb.jpg"
+    assert body["download_status"] == "planned"
+    assert body["download_executor"] == "yt-dlp"
+    assert body["download_format_id"] == "best"
+    assert body["download_format_label"] == "best-available"
+    assert body["download_artifact_path"] == "artifacts/downloads/demo/sample-video.mp4"
     assert body["created_at"]
 
 
@@ -246,4 +265,5 @@ def test_list_jobs_returns_recent_jobs_first(tmp_path) -> None:
     assert body[0]["thumbnail_url"] == "https://example.com/thumb.jpg"
     assert body[0]["source_name"] == "Example Channel"
     assert body[0]["description"] == "Description for second"
+    assert body[0]["download_status"] is None
     assert body[1]["title"] == "Title for first"

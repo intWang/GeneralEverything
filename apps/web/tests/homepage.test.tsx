@@ -186,6 +186,102 @@ test("maps backend completed status to a complete timeline state", async () => {
   ).toHaveAttribute("data-state", "complete");
 });
 
+test("shows metadata-ready timeline copy for a hydrated job", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=55555555-5555-5555-5555-555555555555",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T13:00:00Z",
+    id: "55555555-5555-5555-5555-555555555555",
+    input_mode: "public_video",
+    source_url: "https://example.com/metadata-ready",
+    stage: "metadata_ready",
+    status: "running",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T13:00:00Z",
+      id: "55555555-5555-5555-5555-555555555555",
+      input_mode: "public_video",
+      source_url: "https://example.com/metadata-ready",
+      stage: "metadata_ready",
+      status: "running",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 55555555-5555-5555-5555-555555555555 finished metadata probing.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(
+    screen.getByText(
+      "Metadata is ready, so the workflow can now transition into download preparation.",
+    ),
+  ).toBeInTheDocument();
+});
+
+test("shows download-ready timeline copy for a hydrated job", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=66666666-6666-6666-6666-666666666666",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T13:15:00Z",
+    id: "66666666-6666-6666-6666-666666666666",
+    input_mode: "public_video",
+    source_url: "https://example.com/download-ready",
+    stage: "download_ready",
+    status: "running",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T13:15:00Z",
+      id: "66666666-6666-6666-6666-666666666666",
+      input_mode: "public_video",
+      source_url: "https://example.com/download-ready",
+      stage: "download_ready",
+      status: "running",
+    },
+  ]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 66666666-6666-6666-6666-666666666666 is ready for the download step.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  expect(screen.getByText("Download stage shell")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "The download shell is complete, so the job is ready for downstream processing.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "The job has reached the handoff point for later transcript, summary, mind map, and Ask AI stages.",
+    ),
+  ).toBeInTheDocument();
+});
+
 test("hydrates a revisited job from the URL query", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);
