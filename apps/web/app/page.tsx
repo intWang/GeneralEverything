@@ -184,7 +184,10 @@ export default function HomePage() {
   const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
   const [isHydrating, setIsHydrating] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const activeJobIdRef = useRef<string | null>(jobState?.id ?? null);
   const hydrationRequestIdRef = useRef(0);
+
+  activeJobIdRef.current = jobState?.id ?? null;
 
   async function refreshHistory() {
     try {
@@ -312,14 +315,20 @@ export default function HomePage() {
     const refreshActiveJob = () => {
       void getJob(activeJobId)
         .then((job) => {
+          if (activeJobIdRef.current !== activeJobId) {
+            return;
+          }
+
           setJobState((currentState) =>
             currentState?.id === activeJobId
               ? mergeJobSnapshot(currentState, job)
               : currentState,
           );
-          setInputMode((currentMode) =>
-            currentMode === job.input_mode ? currentMode : job.input_mode,
-          );
+          if (activeJobIdRef.current === activeJobId) {
+            setInputMode((currentMode) =>
+              currentMode === job.input_mode ? currentMode : job.input_mode,
+            );
+          }
         })
         .catch(() => undefined);
     };
@@ -347,8 +356,17 @@ export default function HomePage() {
           return;
         }
 
+        if (
+          ("job_id" in payload &&
+            typeof payload.job_id === "string" &&
+            payload.job_id !== activeJobId) ||
+          activeJobIdRef.current !== activeJobId
+        ) {
+          return;
+        }
+
         setJobState((currentState) =>
-          currentState
+          currentState?.id === activeJobId
             ? {
                 ...currentState,
                 stage:

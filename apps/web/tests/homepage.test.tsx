@@ -1176,3 +1176,134 @@ test("ignores stale hydration responses when a newer history selection resolves 
     ),
   ).not.toBeInTheDocument();
 });
+
+test("ignores stale status events and stale refreshes after switching jobs", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  const handlersByJobId = new Map<
+    string,
+    {
+      onEvent?: (event: { data: unknown; event: string }) => void;
+    }
+  >();
+  let resolveStaleRefresh:
+    | ((value: Awaited<ReturnType<typeof api.getJob>>) => void)
+    | undefined;
+
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T09:00:00Z",
+      id: "11111111-1111-1111-1111-111111111111",
+      input_mode: "public_video",
+      source_url: "https://example.com/first",
+      stage: "queued",
+      status: "queued",
+      title: "First job",
+    },
+    {
+      created_at: "2026-05-04T10:00:00Z",
+      id: "22222222-2222-2222-2222-222222222222",
+      input_mode: "public_video",
+      source_url: "https://example.com/second",
+      stage: "queued",
+      status: "queued",
+      title: "Second job",
+    },
+  ]);
+  getJob.mockImplementation((jobId) => {
+    if (jobId === "11111111-1111-1111-1111-111111111111") {
+      if (!handlersByJobId.has(jobId)) {
+        return Promise.resolve({
+          created_at: "2026-05-04T09:00:00Z",
+          id: jobId,
+          input_mode: "public_video",
+          source_url: "https://example.com/first",
+          stage: "queued",
+          status: "queued",
+          title: "First hydrated job",
+        });
+      }
+
+      return new Promise((resolve) => {
+        resolveStaleRefresh = resolve;
+      });
+    }
+
+    return Promise.resolve({
+      created_at: "2026-05-04T10:00:00Z",
+      id: jobId,
+      input_mode: "public_video",
+      source_url: "https://example.com/second",
+      stage: "queued",
+      status: "queued",
+      title: "Second hydrated job",
+    });
+  });
+  subscribeToJobEvents.mockImplementation((jobId, handlers = {}) => {
+    handlersByJobId.set(jobId, handlers);
+    return () => undefined;
+  });
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=11111111-1111-1111-1111-111111111111",
+  );
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByText("First hydrated job")).toBeInTheDocument();
+  });
+
+  fireEvent.click(
+    screen.getByRole("button", { name: /https:\/\/example.com\/second/i }),
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText("Second hydrated job")).toBeInTheDocument();
+  });
+
+  handlersByJobId.get("11111111-1111-1111-1111-111111111111")?.onEvent?.({
+    event: "job.status",
+    data: {
+      job_id: "11111111-1111-1111-1111-111111111111",
+      stage: "summary_generated",
+      status: "completed",
+    },
+  });
+
+  expect(
+    screen.getByText(
+      "Job 22222222-2222-2222-2222-222222222222 is queued for analysis.",
+    ),
+  ).toBeInTheDocument();
+
+  resolveStaleRefresh?.({
+    created_at: "2026-05-04T09:00:00Z",
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "ringcentral_recording",
+    source_url: "https://example.com/first",
+    stage: "summary_generated",
+    status: "completed",
+    title: "Stale first refresh",
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("Second hydrated job")).toBeInTheDocument();
+  });
+
+  expect(screen.queryByText("Stale first refresh")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      "Job 22222222-2222-2222-2222-222222222222 is completed for analysis.",
+    ),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getByRole("radio", { name: "Public Video URL" }),
+  ).toBeChecked();
+  expect(
+    screen.getByRole("radio", { name: "RingCentral Recording URL" }),
+  ).not.toBeChecked();
+});
