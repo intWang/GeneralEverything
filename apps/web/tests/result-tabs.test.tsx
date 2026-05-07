@@ -62,6 +62,53 @@ test("summarizes AI output readiness across all result areas", () => {
   expect(screen.getByLabelText("Ask AI is ready")).toHaveTextContent("Ready");
 });
 
+test("copies the available AI analysis bundle", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapPreviewText="Product launch, training"
+      mindmapStatus="ready"
+      summarySourceBullets={["产品发布时间已确认", "下周将进行团队培训"]}
+      summarySourceText="录音确认了产品发布时间，并安排了团队培训。"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+      transcriptSourceText={"第一行字幕\n第二行字幕"}
+      transcriptStatus="ready"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Copy analysis bundle" }));
+
+  await waitFor(() => {
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "## Summary",
+        "录音确认了产品发布时间，并安排了团队培训。",
+        "",
+        "### Key points",
+        "- 产品发布时间已确认",
+        "- 下周将进行团队培训",
+        "",
+        "## Transcript",
+        "第一行字幕\n第二行字幕",
+        "",
+        "## Mind Map",
+        "- Product launch",
+        "- Training",
+      ].join("\n"),
+    );
+  });
+  expect(screen.getByText("Analysis bundle copied")).toBeInTheDocument();
+});
+
 test("shows a live summary warmup state before the first transcript segments arrive", () => {
   render(
     <AITabs

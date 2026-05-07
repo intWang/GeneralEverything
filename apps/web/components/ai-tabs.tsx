@@ -18,6 +18,7 @@ const LANGUAGE_NAME_BY_CODE = Object.fromEntries(
 ) as Record<string, string>;
 
 type AITab = (typeof DEFAULT_TABS)[number];
+type AnalysisCopyStatus = "copied" | "failed" | "idle";
 type ReadinessState = "blocked" | "building" | "live" | "ready" | "waiting";
 
 type AITabsProps = {
@@ -253,6 +254,66 @@ function formatReadinessState(state: ReadinessState): string {
   return state[0].toUpperCase() + state.slice(1);
 }
 
+function formatMindMapBranchLabel(branch: string): string {
+  if (!branch) {
+    return branch;
+  }
+
+  return branch.charAt(0).toUpperCase() + branch.slice(1);
+}
+
+function extractMindMapBranches(previewText?: string | null): string[] {
+  return previewText
+    ? previewText
+        .split(",")
+        .map((branch) => branch.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+    : [];
+}
+
+function buildAnalysisBundleText({
+  mindmapBranches,
+  summaryBullets,
+  summaryText,
+  transcriptText,
+}: {
+  mindmapBranches?: readonly string[] | null;
+  summaryBullets?: readonly string[] | null;
+  summaryText?: string | null;
+  transcriptText?: string | null;
+}): string | null {
+  const sections: string[] = [];
+
+  if (summaryText) {
+    const summaryLines = ["## Summary", summaryText];
+    if (summaryBullets?.length) {
+      summaryLines.push(
+        "",
+        "### Key points",
+        ...summaryBullets.map((bullet) => `- ${bullet}`),
+      );
+    }
+    sections.push(summaryLines.join("\n"));
+  }
+
+  if (transcriptText) {
+    sections.push(["## Transcript", transcriptText].join("\n"));
+  }
+
+  const branches = mindmapBranches ?? [];
+  if (branches.length) {
+    sections.push(
+      [
+        "## Mind Map",
+        ...branches.map((branch) => `- ${formatMindMapBranchLabel(branch)}`),
+      ].join("\n"),
+    );
+  }
+
+  return sections.length ? sections.join("\n\n") : null;
+}
+
 export function AITabs({
   activeJobId,
   detectedLanguageName,
@@ -288,6 +349,8 @@ export function AITabs({
   const [summaryIsTranslating, setSummaryIsTranslating] = useState(false);
   const [transcriptIsTranslating, setTranscriptIsTranslating] = useState(false);
   const [summaryBadgePulse, setSummaryBadgePulse] = useState(false);
+  const [analysisCopyStatus, setAnalysisCopyStatus] =
+    useState<AnalysisCopyStatus>("idle");
   const shellStates = deriveTabShellStates(jobStatus, jobStage, transcriptSegmentCount);
   const hasBackendPartialSummary = Boolean(summarySourceText && summaryStatus === "processing");
   const provisionalSummary = buildProvisionalSummary(
@@ -414,6 +477,30 @@ export function AITabs({
     transcriptLanguage === "original"
       ? detectedLanguageName || "Original"
       : LANGUAGE_NAME_BY_CODE[transcriptLanguage] || transcriptLanguage;
+  const analysisBundleText = buildAnalysisBundleText({
+    mindmapBranches: extractMindMapBranches(mindmapPreviewText),
+    summaryBullets: effectiveSummarySourceBullets,
+    summaryText: summaryDisplayText,
+    transcriptText: transcriptDisplayText,
+  });
+
+  useEffect(() => {
+    setAnalysisCopyStatus("idle");
+  }, [activeJobId, analysisBundleText]);
+
+  async function copyAnalysisBundleToClipboard() {
+    if (!analysisBundleText || !navigator.clipboard?.writeText) {
+      setAnalysisCopyStatus("failed");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(analysisBundleText);
+      setAnalysisCopyStatus("copied");
+    } catch {
+      setAnalysisCopyStatus("failed");
+    }
+  }
 
   useEffect(() => {
     if (
@@ -460,6 +547,25 @@ export function AITabs({
           );
         })}
       </div>
+      {analysisBundleText ? (
+        <div className={styles.analysisBundleRow}>
+          <button
+            className={styles.analysisBundleButton}
+            onClick={() => void copyAnalysisBundleToClipboard()}
+            type="button"
+          >
+            Copy analysis bundle
+          </button>
+          {analysisCopyStatus === "copied" ? (
+            <span className={styles.analysisBundleStatus}>
+              Analysis bundle copied
+            </span>
+          ) : null}
+          {analysisCopyStatus === "failed" ? (
+            <span className={styles.analysisBundleStatus}>Copy unavailable</span>
+          ) : null}
+        </div>
+      ) : null}
       <div aria-label="Analysis tabs" className={styles.tabList} role="tablist">
         {tabs.map((tab) => {
           const isSelected = activeTab === tab;

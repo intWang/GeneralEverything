@@ -648,6 +648,41 @@
   letter-spacing: -0.02em;
 }
 
+.analysisBundleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.analysisBundleButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid rgba(194, 65, 12, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7c2d12 0%, #ea580c 100%);
+  color: #fff7ed;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 850;
+  box-shadow: 0 16px 32px -24px rgba(124, 45, 18, 0.75);
+  cursor: pointer;
+}
+
+.analysisBundleButton:hover {
+  transform: translateY(-1px);
+}
+
+.analysisBundleStatus {
+  color: #166534;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
 .tabList {
   display: flex;
   flex-wrap: wrap;
