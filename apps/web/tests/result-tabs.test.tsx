@@ -60,7 +60,7 @@ test("shows a live summary warmup state before the first transcript segments arr
   ).toBeInTheDocument();
   expect(
     screen.getByText(
-      "Once the first stable transcript lines land, the live summary draft will start tightening instead of leaving this panel blank.",
+      "The first stable transcript lines will unlock the live summary draft.",
     ),
   ).toBeInTheDocument();
   expect(screen.getByText("Live progress")).toBeInTheDocument();
@@ -89,7 +89,7 @@ test("builds a provisional summary once enough transcript segments have arrived"
   ).toBeInTheDocument();
   expect(
     screen.getByText(
-      "This early draft refreshes while transcript coverage grows, then hands off to the finalized backend summary.",
+      "This early draft refreshes as transcript coverage grows, then hands off to the finalized summary.",
     ),
   ).toBeInTheDocument();
   expect(
