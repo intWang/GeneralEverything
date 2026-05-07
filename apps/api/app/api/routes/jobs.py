@@ -21,6 +21,7 @@ from app.services.connectors.public_video import (
     PublicVideoProbeError,
     probe_public_video_metadata,
 )
+from app.services.connectors.ringcentral import sanitize_ringcentral_url
 from app.services.events import job_event_broker
 from app.services.ingestion import detect_source_type
 from app.services.qa_pipeline import QAAnswerNotReadyError, answer_job_question
@@ -33,7 +34,7 @@ from app.services.translations.service import (
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 
-def run_public_video_job_in_background(job_id: uuid.UUID, bind) -> None:
+def run_analysis_job_in_background(job_id: uuid.UUID, bind) -> None:
     background_session_factory = sessionmaker(
         bind=bind,
         autoflush=False,
@@ -67,6 +68,10 @@ def run_public_video_job_in_background(job_id: uuid.UUID, bind) -> None:
     )
 
 
+def run_public_video_job_in_background(job_id: uuid.UUID, bind) -> None:
+    run_analysis_job_in_background(job_id, bind)
+
+
 @router.post("", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
 def create_job(
     payload: CreateJobRequest,
@@ -74,9 +79,13 @@ def create_job(
     session: Session = Depends(get_session),
 ) -> JobResponse:
     resolved_input_mode = detect_source_type(str(payload.source_url))
+    source_url = str(payload.source_url)
+    if resolved_input_mode == InputMode.RINGCENTRAL_RECORDING:
+        source_url = sanitize_ringcentral_url(source_url)
+
     job = AnalysisJob(
         input_mode=resolved_input_mode,
-        source_url=str(payload.source_url),
+        source_url=source_url,
     )
     session.add(job)
     session.commit()
@@ -107,6 +116,12 @@ def create_job(
                 job.id,
                 session.get_bind(),
             )
+    elif job.input_mode == InputMode.RINGCENTRAL_RECORDING:
+        background_tasks.add_task(
+            run_analysis_job_in_background,
+            job.id,
+            session.get_bind(),
+        )
 
     return job
 

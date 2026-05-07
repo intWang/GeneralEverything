@@ -8,6 +8,7 @@ from app.services.connectors.public_video import (
     PublicVideoProbeError,
     probe_public_video_metadata,
 )
+from app.services.connectors.ringcentral import RingCentralProbeError
 from app.services.downloads.public_video import (
     PublicVideoDownloadError,
     PublicVideoDownloadShell,
@@ -65,6 +66,12 @@ def _mark_public_video_download_failure(job, exc: PublicVideoDownloadError) -> N
     job.status = JobStatus.FAILED
     job.stage = exc.reason
     job.download_status = "failed"
+
+
+def _mark_ringcentral_probe_failure(job, exc: RingCentralProbeError) -> None:
+    job.status = JobStatus.FAILED
+    job.stage = exc.reason
+    job.diagnostics_json = json.dumps([exc.diagnostic().model_dump()])
 
 
 def _apply_public_video_transcript_shell(
@@ -582,14 +589,49 @@ async def process_analysis_job(ctx: dict, job_id: UUID) -> None:
         return None
 
     job = await _resolve(load_job(job_id))
-    if job is None or job.input_mode != InputMode.PUBLIC_VIDEO:
+    if job is None:
+        await _publish_event(publisher, "video.metadata", {"job_id": str(job_id)})
+        return None
+
+    persist_job = ctx.get("persist_job") or _persist_loaded_job
+
+    if job.input_mode == InputMode.RINGCENTRAL_RECORDING:
+        if job.status in {JobStatus.FAILED, JobStatus.COMPLETED}:
+            return None
+
+        exc = RingCentralProbeError(
+            reason="ringcentral_auth_required",
+            message="This RingCentral recording requires a signed-in session.",
+        )
+        _mark_ringcentral_probe_failure(job, exc)
+        await _resolve(persist_job(job))
+        await _publish_event(
+            publisher,
+            "job.status",
+            {
+                "job_id": str(job_id),
+                "status": job.status.value,
+                "stage": job.stage,
+            },
+        )
+        await _publish_event(
+            publisher,
+            "error",
+            {
+                "job_id": str(job_id),
+                "reason": exc.reason,
+                "message": exc.message,
+                "diagnostic": exc.diagnostic().model_dump(),
+            },
+        )
+        return None
+
+    if job.input_mode != InputMode.PUBLIC_VIDEO:
         await _publish_event(publisher, "video.metadata", {"job_id": str(job_id)})
         return None
 
     if job.status in {JobStatus.FAILED, JobStatus.COMPLETED} or job.stage == "download_ready":
         return None
-
-    persist_job = ctx.get("persist_job") or _persist_loaded_job
 
     if job.stage == "metadata_ready":
         await _execute_public_video_download(
