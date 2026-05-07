@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { vi } from "vitest";
 
@@ -137,6 +137,29 @@ test("offers the AI analysis bundle as a markdown download", () => {
   expect(downloadLink.getAttribute("href")).toContain(
     encodeURIComponent("第一行字幕\n第二行字幕"),
   );
+});
+
+test("summarizes which sections are included in the AI analysis bundle", () => {
+  render(
+    <AITabs
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapPreviewText="Product launch, training"
+      mindmapStatus="ready"
+      summarySourceText="录音确认了产品发布时间，并安排了团队培训。"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+      transcriptSourceText={"第一行字幕\n第二行字幕"}
+      transcriptStatus="ready"
+    />,
+  );
+
+  const contents = screen.getByLabelText("AI analysis bundle contents");
+
+  expect(contents).toHaveTextContent("Bundle includes");
+  expect(within(contents).getByText("Summary")).toBeInTheDocument();
+  expect(within(contents).getByText("Transcript")).toBeInTheDocument();
+  expect(within(contents).getByText("Mind Map")).toBeInTheDocument();
 });
 
 test("shows a live summary warmup state before the first transcript segments arrive", () => {

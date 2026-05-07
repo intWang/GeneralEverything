@@ -677,6 +677,34 @@
   transform: translateY(-1px);
 }
 
+.analysisBundleContents {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.35rem;
+}
+
+.analysisBundleContentsLabel,
+.analysisBundleContentPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.75rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.analysisBundleContentsLabel {
+  color: #78716c;
+}
+
+.analysisBundleContentPill {
+  padding: 0.25rem 0.55rem;
+  background: #f5f5f4;
+  color: #44403c;
+}
+
 .analysisBundleDownloadLink {
   display: inline-flex;
   align-items: center;

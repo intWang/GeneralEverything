@@ -326,6 +326,32 @@ function buildAnalysisBundleFilename(activeJobId?: string): string {
   return safeJobId ? `get-analysis-${safeJobId}.md` : "get-analysis.md";
 }
 
+function buildAnalysisBundleContentLabels({
+  mindmapBranches,
+  summaryText,
+  transcriptText,
+}: {
+  mindmapBranches?: readonly string[] | null;
+  summaryText?: string | null;
+  transcriptText?: string | null;
+}): string[] {
+  const labels: string[] = [];
+
+  if (summaryText) {
+    labels.push("Summary");
+  }
+
+  if (transcriptText) {
+    labels.push("Transcript");
+  }
+
+  if (mindmapBranches?.length) {
+    labels.push("Mind Map");
+  }
+
+  return labels;
+}
+
 export function AITabs({
   activeJobId,
   detectedLanguageName,
@@ -495,6 +521,11 @@ export function AITabs({
     summaryText: summaryDisplayText,
     transcriptText: transcriptDisplayText,
   });
+  const analysisBundleContentLabels = buildAnalysisBundleContentLabels({
+    mindmapBranches: extractMindMapBranches(mindmapPreviewText),
+    summaryText: summaryDisplayText,
+    transcriptText: transcriptDisplayText,
+  });
   const analysisBundleDownloadHref =
     buildAnalysisBundleDownloadHref(analysisBundleText);
   const analysisBundleFilename = buildAnalysisBundleFilename(activeJobId);
@@ -571,6 +602,19 @@ export function AITabs({
           >
             Copy analysis bundle
           </button>
+          <div
+            aria-label="AI analysis bundle contents"
+            className={styles.analysisBundleContents}
+          >
+            <span className={styles.analysisBundleContentsLabel}>
+              Bundle includes
+            </span>
+            {analysisBundleContentLabels.map((label) => (
+              <span className={styles.analysisBundleContentPill} key={label}>
+                {label}
+              </span>
+            ))}
+          </div>
           {analysisBundleDownloadHref ? (
             <a
               className={styles.analysisBundleDownloadLink}
