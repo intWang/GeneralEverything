@@ -54,3 +54,9 @@ jobs:
 
       - name: Run web tests
         run: pnpm test:web
+
+      - name: Install Playwright browser
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: Run web browser smoke tests
+        run: pnpm test:e2e:web
