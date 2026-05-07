@@ -18,6 +18,7 @@ const LANGUAGE_NAME_BY_CODE = Object.fromEntries(
 ) as Record<string, string>;
 
 type AITab = (typeof DEFAULT_TABS)[number];
+type ReadinessState = "blocked" | "building" | "live" | "ready" | "waiting";
 
 type AITabsProps = {
   activeJobId?: string;
@@ -226,6 +227,32 @@ function deriveAskAiShellState(
   return "queued";
 }
 
+function toReadinessState(
+  shellState: AskAiShellState | TabShellState,
+): ReadinessState {
+  if (shellState === "complete") {
+    return "ready";
+  }
+
+  if (shellState === "partial") {
+    return "live";
+  }
+
+  if (shellState === "processing") {
+    return "building";
+  }
+
+  if (shellState === "failed") {
+    return "blocked";
+  }
+
+  return "waiting";
+}
+
+function formatReadinessState(state: ReadinessState): string {
+  return state[0].toUpperCase() + state.slice(1);
+}
+
 export function AITabs({
   activeJobId,
   detectedLanguageName,
@@ -293,6 +320,28 @@ export function AITabs({
     summaryStatus,
     mindmapStatus,
   );
+  const readinessItems = [
+    {
+      label: "Summary",
+      state: toReadinessState(effectiveSummaryShellState),
+    },
+    {
+      label: "Transcript",
+      state: toReadinessState(
+        transcriptStatus === "failed" ? "failed" : shellStates.transcript,
+      ),
+    },
+    {
+      label: "Mind Map",
+      state: toReadinessState(
+        mindmapStatus === "failed" ? "failed" : shellStates.mindmap,
+      ),
+    },
+    {
+      label: "Ask AI",
+      state: toReadinessState(askAiShellState),
+    },
+  ];
 
   useEffect(() => {
     setSummaryLanguage("original");
@@ -394,6 +443,23 @@ export function AITabs({
   return (
     <section aria-label="AI analysis panels" className={styles.panel}>
       <h2 className={styles.panelTitle}>AI output</h2>
+      <div aria-label="AI output readiness" className={styles.readinessGrid}>
+        {readinessItems.map((item) => {
+          const formattedState = formatReadinessState(item.state);
+
+          return (
+            <article
+              aria-label={`${item.label} is ${item.state}`}
+              className={styles.readinessCard}
+              data-state={item.state}
+              key={item.label}
+            >
+              <span className={styles.readinessLabel}>{item.label}</span>
+              <strong className={styles.readinessState}>{formattedState}</strong>
+            </article>
+          );
+        })}
+      </div>
       <div aria-label="Analysis tabs" className={styles.tabList} role="tablist">
         {tabs.map((tab) => {
           const isSelected = activeTab === tab;
@@ -413,6 +479,7 @@ export function AITabs({
                 {tab}
                 {tab === "Summary" && hasLiveSummaryActivity ? (
                   <span
+                    aria-label="Summary live badge"
                     className={styles.tabLiveBadge}
                     data-pulse={summaryBadgePulse ? "true" : "false"}
                   >

@@ -42,6 +42,26 @@ test("shows the progressive summary state by default", () => {
   ).toBeInTheDocument();
 });
 
+test("summarizes AI output readiness across all result areas", () => {
+  render(
+    <AITabs
+      activeJobId="job-123"
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapStatus="ready"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+      transcriptStatus="ready"
+    />,
+  );
+
+  expect(screen.getByLabelText("AI output readiness")).toBeInTheDocument();
+  expect(screen.getByLabelText("Summary is ready")).toHaveTextContent("Ready");
+  expect(screen.getByLabelText("Transcript is ready")).toHaveTextContent("Ready");
+  expect(screen.getByLabelText("Mind Map is live")).toHaveTextContent("Live");
+  expect(screen.getByLabelText("Ask AI is ready")).toHaveTextContent("Ready");
+});
+
 test("shows a live summary warmup state before the first transcript segments arrive", () => {
   render(
     <AITabs
@@ -247,7 +267,10 @@ test("pulses the Summary live badge when early summary updates arrive off-tab", 
     />,
   );
 
-  expect(screen.getByText("Live")).toHaveAttribute("data-pulse", "true");
+  expect(screen.getByLabelText("Summary live badge")).toHaveAttribute(
+    "data-pulse",
+    "true",
+  );
 });
 
 test("keeps the Summary live badge steady while the Summary tab is open", () => {
@@ -280,7 +303,10 @@ test("keeps the Summary live badge steady while the Summary tab is open", () => 
     />,
   );
 
-  expect(screen.getByText("Live")).toHaveAttribute("data-pulse", "false");
+  expect(screen.getByLabelText("Summary live badge")).toHaveAttribute(
+    "data-pulse",
+    "false",
+  );
 });
 
 test("briefly highlights the newest provisional summary bullets", () => {
