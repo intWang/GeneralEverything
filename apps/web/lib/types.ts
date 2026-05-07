@@ -40,6 +40,13 @@ export type Diagnostic = {
   suggestion: string;
 };
 
+export type TranscriptSegment = {
+  end_seconds: number;
+  id: string;
+  start_seconds: number;
+  text: string;
+};
+
 export type JobRecord = {
   created_at: string;
   description: string | null;
@@ -68,6 +75,7 @@ export type JobRecord = {
   transcript_audio_artifact_path?: string | null;
   transcript_extractor?: string | null;
   transcript_preview_text?: string | null;
+  transcript_source_segments?: TranscriptSegment[] | null;
   transcript_source_text?: string | null;
   transcript_translations?: Record<string, string> | null;
   transcript_segment_count?: number | null;

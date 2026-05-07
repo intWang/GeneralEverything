@@ -121,7 +121,11 @@ def _apply_public_video_transcript_result(
     job.transcript_source_text = getattr(transcript_result, "source_text", None)
     source_segments_json = getattr(transcript_result, "source_segments_json", None)
     job.transcript_source_segments_json = (
-        source_segments_json() if callable(source_segments_json) else None
+        source_segments_json()
+        if callable(source_segments_json)
+        else source_segments_json
+        if isinstance(source_segments_json, str)
+        else None
     )
     job.transcript_segment_count = getattr(transcript_result, "segment_count", None)
     job.status = JobStatus.RUNNING

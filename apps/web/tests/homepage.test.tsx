@@ -511,6 +511,13 @@ test("streams transcript text into the transcript tab as segment events arrive",
         detected_language_name: "Chinese",
         preview_text: "大家好，欢迎来到今天的会议。",
         segment_count: 1,
+        source_segments: [
+          {
+            start: 3,
+            end: 5.25,
+            text: "大家好，欢迎来到今天的会议。",
+          },
+        ],
         source_text: "大家好，欢迎来到今天的会议。",
       },
     },
@@ -523,6 +530,7 @@ test("streams transcript text into the transcript tab as segment events arrive",
   expect(
     screen.getByText("大家好，欢迎来到今天的会议。"),
   ).toBeInTheDocument();
+  expect(screen.getByText("00:03")).toBeInTheDocument();
   expect(screen.getByText("Detected language: Chinese")).toBeInTheDocument();
   expect(screen.getByText("Current language: Chinese")).toBeInTheDocument();
   expect(screen.getByText("Segment count: 1")).toBeInTheDocument();
@@ -530,6 +538,50 @@ test("streams transcript text into the transcript tab as segment events arrive",
     screen.getByText("Preview: 大家好，欢迎来到今天的会议。"),
   ).toBeInTheDocument();
   expect(getJob).toHaveBeenCalledTimes(1);
+});
+
+test("renders persisted transcript segments from the hydrated job snapshot", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=18181818-1818-1818-1818-181818181818",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T16:15:00Z",
+    detected_language_name: "English",
+    id: "18181818-1818-1818-1818-181818181818",
+    input_mode: "public_video",
+    source_url: "https://example.com/persisted-transcript",
+    stage: "transcript_generated",
+    status: "running",
+    transcript_segment_count: 1,
+    transcript_source_segments: [
+      {
+        id: "seg-a",
+        start_seconds: 3,
+        end_seconds: 5.25,
+        text: "Structured segment text.",
+      },
+    ],
+    transcript_source_text: "Legacy fallback text.",
+    transcript_status: "ready",
+  });
+  listJobs.mockResolvedValue([]);
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "AI output" })).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(screen.getByText("00:03")).toBeInTheDocument();
+  expect(screen.getByText("Structured segment text.")).toBeInTheDocument();
+  expect(screen.queryByText("Legacy fallback text.")).not.toBeInTheDocument();
 });
 
 test("streams partial summary updates into the summary tab as events arrive", async () => {

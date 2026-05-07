@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import styles from "../app/homepage.module.css";
+import type { TranscriptSegment } from "../lib/types";
 import type { TabShellState } from "./summary-tab";
 
 type TranscriptTabProps = {
@@ -11,6 +12,7 @@ type TranscriptTabProps = {
   extractor?: string | null;
   languageControl?: ReactNode;
   previewText?: string | null;
+  sourceSegments?: readonly TranscriptSegment[] | null;
   sourceText?: string | null;
   segmentCount?: number | null;
   previewLines?: readonly string[];
@@ -23,6 +25,14 @@ const DEFAULT_PREVIEW_LINES = [
   "[00:18] Early lines may be refined as more context becomes available.",
   "[00:42] Finalized transcript segments will replace provisional text in a later task.",
 ] as const;
+
+function formatSegmentTimestamp(startSeconds: number): string {
+  const safeSeconds = Math.max(0, Math.floor(startSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 const SHELL_COPY: Record<
   TabShellState,
@@ -66,6 +76,7 @@ export function TranscriptTab({
   extractor,
   languageControl,
   previewText,
+  sourceSegments,
   sourceText,
   segmentCount,
   previewLines = DEFAULT_PREVIEW_LINES,
@@ -74,6 +85,8 @@ export function TranscriptTab({
 }: TranscriptTabProps) {
   const copy = SHELL_COPY[shellState];
   const hasSourceText = Boolean(sourceText);
+  const hasStructuredSegments = Boolean(sourceSegments?.length);
+  const hasTranscriptContent = hasSourceText || hasStructuredSegments;
   const hasSegmentCount = segmentCount !== null && segmentCount !== undefined;
   const transcriptViewportRef = useRef<HTMLDivElement | null>(null);
   const transcriptTailRef = useRef<HTMLDivElement | null>(null);
@@ -89,17 +102,34 @@ export function TranscriptTab({
       ? "Waiting for the first transcript segment"
       : null;
   const transcriptLines = sourceText ? sourceText.split("\n").filter(Boolean) : [];
+  const indexedTranscriptSegments = (sourceSegments ?? []).map((segment, index) => ({
+    index,
+    segment,
+  }));
   const indexedTranscriptLines = transcriptLines.map((line, index) => ({ index, line }));
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const visibleTranscriptSegments = normalizedSearchQuery
+    ? indexedTranscriptSegments.filter(({ segment }) =>
+        segment.text.toLowerCase().includes(normalizedSearchQuery),
+      )
+    : indexedTranscriptSegments;
   const visibleTranscriptLines = normalizedSearchQuery
     ? indexedTranscriptLines.filter(({ line }) =>
         line.toLowerCase().includes(normalizedSearchQuery),
       )
     : indexedTranscriptLines;
-  const matchingLineCount = normalizedSearchQuery ? visibleTranscriptLines.length : null;
+  const matchingLineCount = normalizedSearchQuery
+    ? hasStructuredSegments
+      ? visibleTranscriptSegments.length
+      : visibleTranscriptLines.length
+    : null;
+  const transcriptTextForCopy =
+    hasStructuredSegments
+      ? sourceSegments?.map((segment) => segment.text).join("\n") ?? null
+      : sourceText ?? null;
 
   useEffect(() => {
-    if (shellState !== "partial" || !sourceText) {
+    if (shellState !== "partial" || !hasTranscriptContent) {
       return;
     }
 
@@ -115,28 +145,30 @@ export function TranscriptTab({
       behavior: "smooth",
       block: "end",
     });
-  }, [autoScrollPaused, segmentCount, shellState, sourceText]);
+  }, [autoScrollPaused, hasTranscriptContent, segmentCount, shellState, sourceSegments, sourceText]);
 
   useEffect(() => {
-    const currentLineCount = transcriptLines.length;
+    const currentItemCount = hasStructuredSegments
+      ? sourceSegments?.length ?? 0
+      : transcriptLines.length;
 
-    if (shellState !== "partial" || currentLineCount === 0) {
-      previousLineCountRef.current = currentLineCount;
+    if (shellState !== "partial" || currentItemCount === 0) {
+      previousLineCountRef.current = currentItemCount;
       setHighlightedLineIndexes([]);
       return;
     }
 
     const previousCount = previousLineCountRef.current;
-    if (currentLineCount <= previousCount) {
-      previousLineCountRef.current = currentLineCount;
+    if (currentItemCount <= previousCount) {
+      previousLineCountRef.current = currentItemCount;
       return;
     }
 
     const nextIndexes = Array.from(
-      { length: Math.min(2, currentLineCount - previousCount) },
-      (_, index) => currentLineCount - Math.min(2, currentLineCount - previousCount) + index,
+      { length: Math.min(2, currentItemCount - previousCount) },
+      (_, index) => currentItemCount - Math.min(2, currentItemCount - previousCount) + index,
     );
-    previousLineCountRef.current = currentLineCount;
+    previousLineCountRef.current = currentItemCount;
     setHighlightedLineIndexes(nextIndexes);
 
     if (highlightResetTimerRef.current !== null) {
@@ -147,7 +179,7 @@ export function TranscriptTab({
       setHighlightedLineIndexes([]);
       highlightResetTimerRef.current = null;
     }, 1800);
-  }, [shellState, sourceText]);
+  }, [hasStructuredSegments, shellState, sourceSegments, sourceText, transcriptLines.length]);
 
   useEffect(() => {
     return () => {
@@ -179,13 +211,13 @@ export function TranscriptTab({
   }
 
   async function copyTranscriptToClipboard() {
-    if (!sourceText || !navigator.clipboard?.writeText) {
+    if (!transcriptTextForCopy || !navigator.clipboard?.writeText) {
       setCopyStatus("failed");
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(sourceText);
+      await navigator.clipboard.writeText(transcriptTextForCopy);
       setCopyStatus("copied");
     } catch {
       setCopyStatus("failed");
@@ -194,7 +226,7 @@ export function TranscriptTab({
 
   return (
     <div>
-      {hasSourceText ? (
+      {hasTranscriptContent ? (
         <>
           <p className={styles.tabStateLabel} data-state={shellState}>
             {shellState === "partial" ? "Streaming transcript" : "Source transcript"}
@@ -280,16 +312,28 @@ export function TranscriptTab({
             onScroll={handleTranscriptScroll}
             ref={transcriptViewportRef}
           >
-            {visibleTranscriptLines.map(({ index, line }) => (
-              <p
-                className={styles.transcriptLine}
-                data-recent={highlightedLineIndexes.includes(index) ? "true" : "false"}
-                data-search-match={normalizedSearchQuery ? "true" : "false"}
-                key={`${index}-${line}`}
-              >
-                {line}
-              </p>
-            ))}
+            {hasStructuredSegments
+              ? visibleTranscriptSegments.map(({ index, segment }) => (
+                  <p
+                    className={styles.transcriptLine}
+                    data-recent={highlightedLineIndexes.includes(index) ? "true" : "false"}
+                    data-search-match={normalizedSearchQuery ? "true" : "false"}
+                    key={segment.id}
+                  >
+                    <span>{formatSegmentTimestamp(segment.start_seconds)}</span>{" "}
+                    {segment.text}
+                  </p>
+                ))
+              : visibleTranscriptLines.map(({ index, line }) => (
+                  <p
+                    className={styles.transcriptLine}
+                    data-recent={highlightedLineIndexes.includes(index) ? "true" : "false"}
+                    data-search-match={normalizedSearchQuery ? "true" : "false"}
+                    key={`${index}-${line}`}
+                  >
+                    {line}
+                  </p>
+                ))}
             <div ref={transcriptTailRef} />
           </div>
         </>
@@ -338,7 +382,7 @@ export function TranscriptTab({
           ) : null}
         </div>
       ) : null}
-      {!hasSourceText ? (
+      {!hasTranscriptContent ? (
         <div className={styles.transcriptPreview}>
           {previewLines.map((line) => (
             <p className={styles.transcriptLine} key={line}>

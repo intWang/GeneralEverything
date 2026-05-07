@@ -685,6 +685,143 @@ test("filters transcript lines by search query", () => {
   expect(screen.queryByText("Training starts next Thursday")).not.toBeInTheDocument();
 });
 
+test("renders structured transcript segments with timestamp chips", () => {
+  render(
+    <AITabs
+      detectedLanguageName="English"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={2}
+      transcriptSourceSegments={[
+        {
+          id: "segment-1",
+          start_seconds: 3,
+          end_seconds: 6.5,
+          text: "Welcome to the launch review.",
+        },
+        {
+          id: "segment-2",
+          start_seconds: 65,
+          end_seconds: 70,
+          text: "Training starts next Thursday.",
+        },
+      ]}
+      transcriptSourceText="Legacy fallback should not render first"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+
+  expect(screen.getByText("00:03")).toBeInTheDocument();
+  expect(screen.getByText("01:05")).toBeInTheDocument();
+  expect(screen.getByText("Welcome to the launch review.")).toBeInTheDocument();
+  expect(screen.getByText("Training starts next Thursday.")).toBeInTheDocument();
+  expect(screen.queryByText("Legacy fallback should not render first")).not.toBeInTheDocument();
+});
+
+test("copies the visible structured transcript segment text", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  render(
+    <AITabs
+      detectedLanguageName="English"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={2}
+      transcriptSourceSegments={[
+        {
+          id: "segment-1",
+          start_seconds: 3,
+          end_seconds: 6.5,
+          text: "Visible structured opening.",
+        },
+        {
+          id: "segment-2",
+          start_seconds: 65,
+          end_seconds: 70,
+          text: "Visible structured follow-up.",
+        },
+      ]}
+      transcriptSourceText="Legacy fallback copy should not win."
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+  fireEvent.click(screen.getByRole("button", { name: "Copy transcript" }));
+
+  await waitFor(() => {
+    expect(writeText).toHaveBeenCalledWith(
+      "Visible structured opening.\nVisible structured follow-up.",
+    );
+  });
+});
+
+test("highlights newly appended structured transcript segments", () => {
+  const scrollIntoView = vi.fn();
+
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: scrollIntoView,
+  });
+
+  const { rerender } = render(
+    <AITabs
+      detectedLanguageName="English"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={1}
+      transcriptSourceSegments={[
+        {
+          id: "segment-1",
+          start_seconds: 3,
+          end_seconds: 6.5,
+          text: "First structured segment.",
+        },
+      ]}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+  scrollIntoView.mockClear();
+
+  rerender(
+    <AITabs
+      detectedLanguageName="English"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={2}
+      transcriptSourceSegments={[
+        {
+          id: "segment-1",
+          start_seconds: 3,
+          end_seconds: 6.5,
+          text: "First structured segment.",
+        },
+        {
+          id: "segment-2",
+          start_seconds: 8,
+          end_seconds: 11,
+          text: "Second structured segment.",
+        },
+      ]}
+    />,
+  );
+
+  expect(
+    screen.getByText((_content, element) =>
+      Boolean(
+        element?.tagName === "P" &&
+          element.textContent?.includes("Second structured segment."),
+      ),
+    ),
+  ).toHaveAttribute("data-recent", "true");
+  expect(scrollIntoView).toHaveBeenCalled();
+});
+
 test("copies the full transcript text to the clipboard", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {

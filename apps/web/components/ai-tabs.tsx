@@ -40,6 +40,7 @@ type AITabsProps = {
   transcriptAudioArtifactPath?: JobRecord["transcript_audio_artifact_path"];
   transcriptExtractor?: JobRecord["transcript_extractor"];
   transcriptPreviewText?: JobRecord["transcript_preview_text"];
+  transcriptSourceSegments?: JobRecord["transcript_source_segments"];
   transcriptSourceText?: JobRecord["transcript_source_text"];
   transcriptTranslations?: JobRecord["transcript_translations"];
   transcriptSegmentCount?: JobRecord["transcript_segment_count"];
@@ -371,6 +372,7 @@ export function AITabs({
   transcriptAudioArtifactPath,
   transcriptExtractor,
   transcriptPreviewText,
+  transcriptSourceSegments,
   transcriptSourceText,
   transcriptTranslations: initialTranscriptTranslations,
   transcriptSegmentCount,
@@ -834,6 +836,7 @@ export function AITabs({
                 : undefined
             }
             previewText={transcriptPreviewText}
+            sourceSegments={transcriptSourceSegments}
             sourceText={transcriptDisplayText}
             segmentCount={transcriptSegmentCount}
             shellState={

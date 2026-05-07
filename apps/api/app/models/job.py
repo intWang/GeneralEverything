@@ -88,6 +88,48 @@ class AnalysisJob(Base):
         return json.loads(self.transcript_translations_json)
 
     @property
+    def transcript_source_segments(self) -> list[dict] | None:
+        if not self.transcript_source_segments_json:
+            return None
+
+        try:
+            source_segments = json.loads(self.transcript_source_segments_json)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+        if not isinstance(source_segments, list):
+            return None
+
+        normalized_segments: list[dict] = []
+        for index, segment in enumerate(source_segments, start=1):
+            if not isinstance(segment, dict):
+                continue
+
+            text_value = segment.get("text")
+            if not isinstance(text_value, str):
+                continue
+
+            start_seconds = segment.get("start_seconds", segment.get("start"))
+            end_seconds = segment.get("end_seconds", segment.get("end"))
+            if not isinstance(start_seconds, int | float) or not isinstance(
+                end_seconds,
+                int | float,
+            ):
+                continue
+
+            segment_id = segment.get("id")
+            normalized_segments.append(
+                {
+                    "id": segment_id if isinstance(segment_id, str) else f"segment-{index}",
+                    "start_seconds": float(start_seconds),
+                    "end_seconds": float(end_seconds),
+                    "text": text_value,
+                }
+            )
+
+        return normalized_segments or None
+
+    @property
     def download_progress(self) -> dict | None:
         if not self.download_progress_json:
             return None

@@ -61,6 +61,7 @@ class JobResponse(BaseModel):
     detected_language_name: str | None
     transcript_preview_text: str | None
     transcript_source_text: str | None
+    transcript_source_segments: list[dict] | None = None
     transcript_translations: dict[str, str] | None = None
     transcript_segment_count: int | None
     summary_status: str | None

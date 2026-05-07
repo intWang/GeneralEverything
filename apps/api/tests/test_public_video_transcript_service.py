@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
 
 from app.models.job import AnalysisJob, InputMode, JobStatus
+from app.schemas.jobs import JobResponse
 from app.services.transcripts.public_video import (
     PublicVideoTranscriptExecutionError,
     PublicVideoTranscriptShellError,
@@ -162,6 +164,64 @@ def test_execute_public_video_transcript_shell_returns_detected_language_and_sou
         {"start": 0.0, "end": 2.1, "text": "大家好，欢迎来到今天的会议。"},
     ]
     assert result.segment_count == 1
+
+
+def test_job_response_exposes_normalized_transcript_source_segments() -> None:
+    job = _make_job()
+    job.title = "Demo video"
+    job.thumbnail_url = "https://example.com/thumb.jpg"
+    job.transcript_source_text = "Hello from the first segment."
+    job.transcript_source_segments_json = (
+        '[{"start": 3.0, "end": 5.25, "text": "Hello from the first segment."}]'
+    )
+    job.created_at = datetime(2026, 5, 8, tzinfo=timezone.utc)
+
+    response = JobResponse.model_validate(job)
+
+    assert response.transcript_source_segments == [
+        {
+            "id": "segment-1",
+            "start_seconds": 3.0,
+            "end_seconds": 5.25,
+            "text": "Hello from the first segment.",
+        },
+    ]
+
+
+def test_job_response_preserves_structured_transcript_source_segments() -> None:
+    job = _make_job()
+    job.title = "Demo video"
+    job.thumbnail_url = "https://example.com/thumb.jpg"
+    job.transcript_source_text = "Structured segment text."
+    job.transcript_source_segments_json = (
+        '[{"id": "seg-a", "start_seconds": 3, "end_seconds": 5.25, '
+        '"text": "Structured segment text."}]'
+    )
+    job.created_at = datetime(2026, 5, 8, tzinfo=timezone.utc)
+
+    response = JobResponse.model_validate(job)
+
+    assert response.transcript_source_segments == [
+        {
+            "id": "seg-a",
+            "start_seconds": 3.0,
+            "end_seconds": 5.25,
+            "text": "Structured segment text.",
+        },
+    ]
+
+
+def test_job_response_ignores_malformed_transcript_source_segments_json() -> None:
+    job = _make_job()
+    job.title = "Demo video"
+    job.thumbnail_url = "https://example.com/thumb.jpg"
+    job.transcript_source_text = "Transcript text is still available."
+    job.transcript_source_segments_json = "{not valid json"
+    job.created_at = datetime(2026, 5, 8, tzinfo=timezone.utc)
+
+    response = JobResponse.model_validate(job)
+
+    assert response.transcript_source_segments is None
 
 
 def test_execute_public_video_transcript_shell_requires_audio_artifact() -> None:

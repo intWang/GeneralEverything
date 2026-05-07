@@ -12,7 +12,7 @@ import { StatusTimeline } from "../components/status-timeline";
 import { VideoInfoPanel } from "../components/video-info-panel";
 import { getJob, listJobs } from "../lib/api";
 import { subscribeToJobEvents } from "../lib/sse";
-import type { DownloadProgress, InputMode, JobRecord } from "../lib/types";
+import type { DownloadProgress, InputMode, JobRecord, TranscriptSegment } from "../lib/types";
 import type { CreateJobResponse } from "../lib/api";
 
 const KNOWN_JOB_STATUSES = ["queued", "running", "failed", "completed"] as const;
@@ -197,6 +197,42 @@ function mergeJobStatusUpdate(
     stage: stage ?? currentJob.stage,
     status,
   });
+}
+
+function normalizeTranscriptSegments(value: unknown): TranscriptSegment[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalizedSegments: TranscriptSegment[] = [];
+  value.forEach((segment, index) => {
+    if (!segment || typeof segment !== "object") {
+      return;
+    }
+
+    const segmentRecord = segment as Record<string, unknown>;
+    const text = segmentRecord.text;
+    const startSeconds = segmentRecord.start_seconds ?? segmentRecord.start;
+    const endSeconds = segmentRecord.end_seconds ?? segmentRecord.end;
+
+    if (
+      typeof text !== "string" ||
+      typeof startSeconds !== "number" ||
+      typeof endSeconds !== "number"
+    ) {
+      return;
+    }
+
+    const id = segmentRecord.id;
+    normalizedSegments.push({
+      id: typeof id === "string" ? id : `segment-${index + 1}`,
+      start_seconds: startSeconds,
+      end_seconds: endSeconds,
+      text,
+    });
+  });
+
+  return normalizedSegments;
 }
 
 type NullableProgressNumberField = Exclude<keyof DownloadProgress, "status">;
@@ -418,6 +454,9 @@ export default function HomePage() {
           }
 
           const transcriptPayload = payload.transcript as Record<string, unknown>;
+          const transcriptSourceSegments = normalizeTranscriptSegments(
+            transcriptPayload.source_segments,
+          );
           setJobState((currentState) => {
             if (currentState?.id !== activeJobId) {
               return currentState;
@@ -447,6 +486,8 @@ export default function HomePage() {
                 typeof transcriptPayload.source_text === "string"
                   ? transcriptPayload.source_text
                   : currentState.transcript_source_text,
+              transcript_source_segments:
+                transcriptSourceSegments ?? currentState.transcript_source_segments,
               transcript_status: "processing",
             });
           });
@@ -803,6 +844,7 @@ export default function HomePage() {
                   transcriptAudioArtifactPath={jobState.transcript_audio_artifact_path}
                   transcriptExtractor={jobState.transcript_extractor}
                   transcriptPreviewText={jobState.transcript_preview_text}
+                  transcriptSourceSegments={jobState.transcript_source_segments}
                   transcriptSourceText={jobState.transcript_source_text}
                   transcriptTranslations={jobState.transcript_translations}
                   transcriptSegmentCount={jobState.transcript_segment_count}
