@@ -80,6 +80,7 @@ export function TranscriptTab({
   const previousLineCountRef = useRef(0);
   const highlightResetTimerRef = useRef<number | null>(null);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | "idle">("idle");
   const [highlightedLineIndexes, setHighlightedLineIndexes] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const segmentStatusLabel = hasSegmentCount
@@ -177,6 +178,20 @@ export function TranscriptTab({
     }
   }
 
+  async function copyTranscriptToClipboard() {
+    if (!sourceText || !navigator.clipboard?.writeText) {
+      setCopyStatus("failed");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(sourceText);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
+
   return (
     <div>
       {hasSourceText ? (
@@ -209,6 +224,25 @@ export function TranscriptTab({
           {translationStatusLabel ? (
             <p className={styles.tabSectionBody}>{translationStatusLabel}</p>
           ) : null}
+          <div className={styles.transcriptActionRow}>
+            <button
+              className={styles.transcriptCopyButton}
+              onClick={() => void copyTranscriptToClipboard()}
+              type="button"
+            >
+              Copy transcript
+            </button>
+            {copyStatus === "copied" ? (
+              <span className={styles.transcriptCopyStatus}>
+                Transcript copied
+              </span>
+            ) : null}
+            {copyStatus === "failed" ? (
+              <span className={styles.transcriptCopyStatus}>
+                Copy unavailable
+              </span>
+            ) : null}
+          </div>
           <div className={styles.transcriptSearchRow}>
             <label className={styles.transcriptSearchLabel}>
               Search transcript

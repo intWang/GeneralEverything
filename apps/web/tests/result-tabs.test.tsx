@@ -491,6 +491,35 @@ test("filters transcript lines by search query", () => {
   expect(screen.queryByText("Training starts next Thursday")).not.toBeInTheDocument();
 });
 
+test("copies the full transcript text to the clipboard", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={3}
+      transcriptSourceText={"第一行字幕\n第二行字幕\n第三行字幕"}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+  fireEvent.change(screen.getByLabelText("Search transcript"), {
+    target: { value: "第二" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Copy transcript" }));
+
+  await waitFor(() => {
+    expect(writeText).toHaveBeenCalledWith("第一行字幕\n第二行字幕\n第三行字幕");
+  });
+  expect(screen.getByText("Transcript copied")).toBeInTheDocument();
+});
+
 test("auto-scrolls transcript view when new streaming lines arrive", () => {
   const scrollIntoView = vi.fn();
 
