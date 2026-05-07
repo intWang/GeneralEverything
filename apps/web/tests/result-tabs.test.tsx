@@ -182,12 +182,26 @@ test("toggles a markdown preview for the AI analysis bundle", () => {
     screen.queryByLabelText("AI analysis markdown preview"),
   ).not.toBeInTheDocument();
 
-  fireEvent.click(screen.getByRole("button", { name: "Preview bundle" }));
+  const previewButton = screen.getByRole("button", { name: "Preview bundle" });
+  expect(previewButton).toHaveAttribute("aria-controls", "analysis-bundle-preview");
+  expect(previewButton).toHaveAttribute("aria-expanded", "false");
+
+  fireEvent.click(previewButton);
 
   const preview = screen.getByLabelText("AI analysis markdown preview");
+  expect(preview).toHaveAttribute("id", "analysis-bundle-preview");
   expect(preview).toHaveTextContent("## Summary");
   expect(preview).toHaveTextContent("第一行字幕");
-  expect(screen.getByRole("button", { name: "Hide preview" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Hide preview" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Hide preview" }));
+
+  expect(
+    screen.queryByLabelText("AI analysis markdown preview"),
+  ).not.toBeInTheDocument();
 });
 
 test("shows a live summary warmup state before the first transcript segments arrive", () => {

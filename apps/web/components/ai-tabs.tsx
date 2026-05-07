@@ -13,6 +13,7 @@ import type { JobRecord, JobStatus } from "../lib/types";
 import type { TabShellState } from "./summary-tab";
 
 const DEFAULT_TABS = ["Summary", "Transcript", "Mind Map", "Ask AI"] as const;
+const ANALYSIS_BUNDLE_PREVIEW_ID = "analysis-bundle-preview";
 const LANGUAGE_NAME_BY_CODE = Object.fromEntries(
   SUPPORTED_TRANSLATION_LANGUAGES.map((language) => [language.code, language.name]),
 ) as Record<string, string>;
@@ -630,6 +631,7 @@ export function AITabs({
             </a>
           ) : null}
           <button
+            aria-controls={ANALYSIS_BUNDLE_PREVIEW_ID}
             aria-expanded={analysisPreviewIsOpen}
             className={styles.analysisBundlePreviewButton}
             onClick={() => setAnalysisPreviewIsOpen((isOpen) => !isOpen)}
@@ -659,6 +661,7 @@ export function AITabs({
             <pre
               aria-label="AI analysis markdown preview"
               className={styles.analysisBundlePreview}
+              id={ANALYSIS_BUNDLE_PREVIEW_ID}
             >
               {analysisBundleText}
             </pre>
