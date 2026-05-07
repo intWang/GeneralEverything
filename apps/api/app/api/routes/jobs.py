@@ -1,6 +1,7 @@
 import uuid
 import asyncio
 import json
+from dataclasses import asdict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from fastapi import HTTPException, Query
@@ -174,6 +175,9 @@ def submit_job_question(
         answer=answer_shell.answer,
         grounded=answer_shell.grounded,
         references=list(answer_shell.references),
+        structured_references=[
+            asdict(reference) for reference in answer_shell.structured_references
+        ],
     )
 
 

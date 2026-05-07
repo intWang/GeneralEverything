@@ -17,6 +17,7 @@ type TranscriptTabProps = {
   segmentCount?: number | null;
   previewLines?: readonly string[];
   shellState?: TabShellState;
+  jumpTargetLabel?: string | null;
   translationStatusLabel?: string | null;
 };
 
@@ -81,6 +82,7 @@ export function TranscriptTab({
   segmentCount,
   previewLines = DEFAULT_PREVIEW_LINES,
   shellState = "queued",
+  jumpTargetLabel,
   translationStatusLabel,
 }: TranscriptTabProps) {
   const copy = SHELL_COPY[shellState];
@@ -256,6 +258,11 @@ export function TranscriptTab({
           {translationStatusLabel ? (
             <p className={styles.tabSectionBody}>{translationStatusLabel}</p>
           ) : null}
+          {jumpTargetLabel ? (
+            <p className={styles.askAiStatus}>
+              Transcript jump target: {jumpTargetLabel}
+            </p>
+          ) : null}
           <div className={styles.transcriptActionRow}>
             <button
               className={styles.transcriptCopyButton}
@@ -346,6 +353,11 @@ export function TranscriptTab({
           <p className={styles.tabSectionBody}>
             {copy.body}
           </p>
+          {jumpTargetLabel ? (
+            <p className={styles.askAiStatus}>
+              Transcript jump target: {jumpTargetLabel}
+            </p>
+          ) : null}
           {segmentStatusLabel ? (
             <div className={styles.transcriptProgressCard}>
               <div className={styles.transcriptProgressHeader}>

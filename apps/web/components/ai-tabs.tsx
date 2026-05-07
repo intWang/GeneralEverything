@@ -8,6 +8,7 @@ import { MindMapTab } from "./mindmap-tab";
 import { SummaryTab } from "./summary-tab";
 import { TranscriptTab } from "./transcript-tab";
 import { translateJobContent } from "../lib/api";
+import type { AskAiStructuredReference } from "../lib/api";
 import { SUPPORTED_TRANSLATION_LANGUAGES } from "../lib/translation-languages";
 import type { JobRecord, JobStatus } from "../lib/types";
 import type { TabShellState } from "./summary-tab";
@@ -365,6 +366,20 @@ function buildAnalysisBundleContentLabels({
   return labels;
 }
 
+function formatReferenceTimestamp(totalSeconds?: number | null) {
+  if (typeof totalSeconds !== "number") {
+    return "unknown time";
+  }
+
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+}
+
 export function AITabs({
   activeJobId,
   detectedLanguageName,
@@ -406,6 +421,9 @@ export function AITabs({
   const [analysisCopyStatus, setAnalysisCopyStatus] =
     useState<AnalysisCopyStatus>("idle");
   const [analysisPreviewIsOpen, setAnalysisPreviewIsOpen] = useState(false);
+  const [transcriptJumpTargetLabel, setTranscriptJumpTargetLabel] = useState<string | null>(
+    null,
+  );
   const shellStates = deriveTabShellStates(jobStatus, jobStage, transcriptSegmentCount);
   const structuredSummaryText = summaryStructured?.abstract ?? null;
   const hasFinalSummaryText = Boolean(summarySourceText || structuredSummaryText);
@@ -562,6 +580,16 @@ export function AITabs({
   }, [activeJobId, analysisBundleText]);
 
   useEffect(() => {
+    setTranscriptJumpTargetLabel(null);
+  }, [activeJobId]);
+
+  useEffect(() => {
+    if (askAiShellState !== "complete") {
+      setTranscriptJumpTargetLabel(null);
+    }
+  }, [askAiShellState]);
+
+  useEffect(() => {
     if (!analysisPreviewIsOpen) {
       return;
     }
@@ -588,6 +616,11 @@ export function AITabs({
     } catch {
       setAnalysisCopyStatus("failed");
     }
+  }
+
+  function handleTranscriptJump(reference: AskAiStructuredReference) {
+    setTranscriptJumpTargetLabel(formatReferenceTimestamp(reference.start_seconds));
+    setActiveTab("Transcript");
   }
 
   useEffect(() => {
@@ -861,6 +894,7 @@ export function AITabs({
             sourceSegments={transcriptSourceSegments}
             sourceText={transcriptDisplayText}
             segmentCount={transcriptSegmentCount}
+            jumpTargetLabel={transcriptJumpTargetLabel}
             shellState={
               transcriptStatus === "failed" ? "failed" : shellStates.transcript
             }
@@ -893,6 +927,7 @@ export function AITabs({
           <AskAiTab
             jobId={activeJobId}
             key={activeJobId ?? "ask-ai-shell"}
+            onTranscriptJump={handleTranscriptJump}
             shellState={askAiShellState}
           />
         ) : null}

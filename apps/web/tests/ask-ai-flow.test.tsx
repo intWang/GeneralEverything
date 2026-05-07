@@ -103,6 +103,15 @@ test("renders the backend Ask AI response from the homepage workspace after subm
     job_id: "55555555-5555-5555-5555-555555555555",
     question: "What should I review next?",
     references: buildAskAiMockReferences("homepage.wav"),
+    structured_references: [
+      {
+        source_type: "transcript",
+        segment_id: "segment-1",
+        start_seconds: 3,
+        end_seconds: 8,
+        snippet: "Opening segment explains the release decision.",
+      },
+    ],
   });
 
   await waitFor(() => {
@@ -115,11 +124,22 @@ test("renders the backend Ask AI response from the homepage workspace after subm
   await waitFor(() => {
     expect(screen.getByText("References")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        buildAskAiMockReferences("homepage.wav")[0],
-      ),
+      screen.getByText("Opening segment explains the release decision."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Jump to transcript 00:03" }),
     ).toBeInTheDocument();
   });
+
+  fireEvent.click(screen.getByRole("button", { name: "Jump to transcript 00:03" }));
+
+  expect(screen.getByRole("tab", { name: "Transcript" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  expect(screen.getByRole("tabpanel")).toHaveTextContent(
+    "Transcript jump target: 00:03",
+  );
 });
 
 test("keeps Ask AI submission blocked while grounding is still stabilizing", async () => {

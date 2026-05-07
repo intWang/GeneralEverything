@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import styles from "../app/homepage.module.css";
 import {
+  type AskAiStructuredReference,
   ApiError,
   submitJobQuestion,
   type SubmitJobQuestionResponse,
@@ -13,6 +14,7 @@ export type AskAiShellState = "queued" | "processing" | "complete" | "failed";
 
 type AskAiTabProps = {
   jobId?: string;
+  onTranscriptJump?: (reference: AskAiStructuredReference) => void;
   shellState?: AskAiShellState;
 };
 
@@ -86,8 +88,14 @@ const SUGGESTED_QUESTIONS = [
 
 function buildAnswerClipboardText(answerShell: SubmitJobQuestionResponse) {
   const sections = [["Answer", answerShell.answer]];
+  const structuredReferences = answerShell.structured_references ?? [];
 
-  if (answerShell.references.length) {
+  if (structuredReferences.length) {
+    sections.push([
+      "References",
+      ...structuredReferences.map((reference) => `- ${formatStructuredReference(reference)}`),
+    ]);
+  } else if (answerShell.references.length) {
     sections.push([
       "References",
       ...answerShell.references.map((reference) => `- ${reference}`),
@@ -97,7 +105,48 @@ function buildAnswerClipboardText(answerShell: SubmitJobQuestionResponse) {
   return sections.map((section) => section.join("\n")).join("\n\n");
 }
 
-export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
+function formatReferenceTimestamp(totalSeconds?: number | null) {
+  if (typeof totalSeconds !== "number") {
+    return null;
+  }
+
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function formatSourceType(sourceType: string) {
+  return sourceType
+    .split("_")
+    .filter(Boolean)
+    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
+    .join(" ");
+}
+
+function formatStructuredReference(reference: AskAiStructuredReference) {
+  const timestamp = formatReferenceTimestamp(reference.start_seconds);
+  const label = timestamp
+    ? `${formatSourceType(reference.source_type)} ${timestamp}`
+    : formatSourceType(reference.source_type);
+
+  return `${label}: ${reference.snippet}`;
+}
+
+function buildTranscriptJumpLabel(reference: AskAiStructuredReference) {
+  const timestamp = formatReferenceTimestamp(reference.start_seconds);
+
+  return timestamp ? `Jump to transcript ${timestamp}` : "Jump to transcript";
+}
+
+export function AskAiTab({
+  jobId,
+  onTranscriptJump,
+  shellState = "queued",
+}: AskAiTabProps) {
   const [question, setQuestion] = useState("");
   const [answerShell, setAnswerShell] = useState<SubmitJobQuestionResponse | null>(null);
   const [answerCopyStatus, setAnswerCopyStatus] = useState<"copied" | "failed" | "idle">("idle");
@@ -107,6 +156,7 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
   const copy = SHELL_COPY[shellState];
   const isReady = shellState === "complete";
   const canSubmit = copy.canSubmit && !!jobId && question.trim().length > 0 && !isSubmitting;
+  const structuredReferences = answerShell?.structured_references ?? [];
 
   useEffect(() => {
     activeRequestIdRef.current += 1;
@@ -272,7 +322,35 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
             ) : null}
           </div>
         ) : null}
-        {answerShell?.references.length ? (
+        {structuredReferences.length ? (
+          <div>
+            <h5 className={styles.askAiAnswerTitle}>References</h5>
+            <ul className={styles.tabHintList}>
+              {structuredReferences.map((reference, index) => (
+                <li
+                  className={styles.tabHintItem}
+                  key={`${reference.source_type}-${reference.segment_id ?? index}`}
+                >
+                  <strong>{formatSourceType(reference.source_type)}</strong>
+                  {formatReferenceTimestamp(reference.start_seconds) ? (
+                    <span> {formatReferenceTimestamp(reference.start_seconds)}</span>
+                  ) : null}
+                  <p className={styles.tabSectionBody}>{reference.snippet}</p>
+                  {reference.source_type === "transcript" ? (
+                    <button
+                      aria-label={buildTranscriptJumpLabel(reference)}
+                      className={styles.askAiSuggestionButton}
+                      onClick={() => onTranscriptJump?.(reference)}
+                      type="button"
+                    >
+                      {buildTranscriptJumpLabel(reference)}
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : answerShell?.references.length ? (
           <div>
             <h5 className={styles.askAiAnswerTitle}>References</h5>
             <ul className={styles.tabHintList}>

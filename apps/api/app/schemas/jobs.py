@@ -14,12 +14,21 @@ class AskJobQuestionRequest(BaseModel):
     question: str
 
 
+class AskJobQuestionReference(BaseModel):
+    source_type: str
+    segment_id: str | None = None
+    start_seconds: float | None = None
+    end_seconds: float | None = None
+    snippet: str
+
+
 class AskJobQuestionResponse(BaseModel):
     answer: str
     grounded: bool
     job_id: uuid.UUID
     question: str
     references: list[str]
+    structured_references: list[AskJobQuestionReference] = Field(default_factory=list)
 
 
 class TranslateJobContentRequest(BaseModel):

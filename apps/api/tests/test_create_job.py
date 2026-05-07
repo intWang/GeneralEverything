@@ -385,6 +385,10 @@ def test_submit_job_question_returns_grounded_answer_shell(tmp_path) -> None:
                 "Transcript shell generated for sample.wav. It captures a longer "
                 "explanation so Ask AI references stay compact in the workspace."
             )
+            persisted_job.transcript_source_segments_json = (
+                '[{"id":"segment-1","start_seconds":3,"end_seconds":8,'
+                '"text":"Opening segment explains the release decision."}]'
+            )
             persisted_job.summary_status = "ready"
             persisted_job.summary_preview_text = (
                 "Summary shell generated from transcript preview. It keeps enough "
@@ -419,6 +423,33 @@ def test_submit_job_question_returns_grounded_answer_shell(tmp_path) -> None:
             "Transcript: Transcript shell generated for sample.wav. It captures a longer expla...",
             "Summary: Summary shell generated from transcript preview. It keeps enough deta...",
             "Mind map: Mind map shell generated from summary preview. It expands into more c...",
+        ],
+        "structured_references": [
+            {
+                "source_type": "transcript",
+                "segment_id": "segment-1",
+                "start_seconds": 3.0,
+                "end_seconds": 8.0,
+                "snippet": "Opening segment explains the release decision.",
+            },
+            {
+                "source_type": "summary",
+                "segment_id": None,
+                "start_seconds": None,
+                "end_seconds": None,
+                "snippet": (
+                    "Summary shell generated from transcript preview. It keeps enough deta..."
+                ),
+            },
+            {
+                "source_type": "mindmap",
+                "segment_id": None,
+                "start_seconds": None,
+                "end_seconds": None,
+                "snippet": (
+                    "Mind map shell generated from summary preview. It expands into more c..."
+                ),
+            },
         ],
     }
 

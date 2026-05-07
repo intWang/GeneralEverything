@@ -1363,6 +1363,69 @@ test("submits a grounded Ask AI question and renders the backend answer shell", 
   ).toBeInTheDocument();
 });
 
+test("clears the Ask AI transcript jump target when the same job loses Ask AI readiness", async () => {
+  vi.mocked(api.submitJobQuestion).mockResolvedValue({
+    answer:
+      'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.',
+    grounded: true,
+    job_id: "job-123",
+    question: "What should I review next?",
+    references: buildAskAiMockReferences("222.wav"),
+    structured_references: [
+      {
+        source_type: "transcript",
+        segment_id: "segment-1",
+        start_seconds: 3,
+        end_seconds: 8,
+        snippet: "Opening segment explains the release decision.",
+      },
+    ],
+  });
+
+  const { rerender } = render(
+    <AITabs
+      activeJobId="job-123"
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapStatus="ready"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "What should I review next?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Jump to transcript 00:03" }));
+
+  expect(screen.getByRole("tab", { name: "Transcript" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  expect(screen.getByRole("tabpanel")).toHaveTextContent(
+    "Transcript jump target: 00:03",
+  );
+
+  rerender(
+    <AITabs
+      activeJobId="job-123"
+      jobStage="building_summary"
+      jobStatus="running"
+      summaryStatus="processing"
+      transcriptSegmentCount={3}
+    />,
+  );
+
+  await waitFor(() => {
+    expect(screen.getByRole("tabpanel")).not.toHaveTextContent(
+      "Transcript jump target: 00:03",
+    );
+  });
+});
+
 test("copies a grounded Ask AI answer with references", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {

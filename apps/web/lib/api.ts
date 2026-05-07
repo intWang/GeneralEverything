@@ -1,12 +1,20 @@
 import type { JobRecord } from "./types";
 
 export type CreateJobResponse = JobRecord;
+export type AskAiStructuredReference = {
+  source_type: string;
+  segment_id?: string | null;
+  start_seconds?: number | null;
+  end_seconds?: number | null;
+  snippet: string;
+};
 export type SubmitJobQuestionResponse = {
   answer: string;
   grounded: boolean;
   job_id: string;
   question: string;
   references: string[];
+  structured_references?: AskAiStructuredReference[];
 };
 export type TranslateJobContentResponse = {
   content_type: "summary" | "transcript";

@@ -24,13 +24,23 @@ class QAAnswerShell:
     grounded: bool
     question: str
     references: tuple[str, ...]
+    structured_references: tuple["QAAnswerReferenceShell", ...] = ()
+
+
+@dataclass(frozen=True)
+class QAAnswerReferenceShell:
+    source_type: str
+    segment_id: str | None
+    start_seconds: float | None
+    end_seconds: float | None
+    snippet: str
 
 
 class QAAnswerNotReadyError(RuntimeError):
     pass
 
 
-def _build_reference(label: str, preview_text: str | None) -> str:
+def _build_snippet(preview_text: str | None) -> str | None:
     if preview_text:
         normalized_preview = " ".join(preview_text.split())
         if normalized_preview:
@@ -39,9 +49,50 @@ def _build_reference(label: str, preview_text: str | None) -> str:
                     normalized_preview[: REFERENCE_PREVIEW_MAX_CHARS - 3].rstrip()
                     + "..."
                 )
-            return f"{label}: {normalized_preview}"
+            return normalized_preview
 
+    return None
+
+
+def _build_reference(label: str, preview_text: str | None) -> str:
+    snippet = _build_snippet(preview_text)
+    if snippet:
+        return f"{label}: {snippet}"
     return f"{label}: shell preview unavailable"
+
+
+def _build_structured_references(job: AnalysisJob) -> tuple[QAAnswerReferenceShell, ...]:
+    references: list[QAAnswerReferenceShell] = []
+    transcript_segments = job.transcript_source_segments or []
+    if transcript_segments:
+        first_segment = transcript_segments[0]
+        references.append(
+            QAAnswerReferenceShell(
+                source_type="transcript",
+                segment_id=first_segment["id"],
+                start_seconds=first_segment["start_seconds"],
+                end_seconds=first_segment["end_seconds"],
+                snippet=_build_snippet(first_segment["text"]) or first_segment["text"],
+            )
+        )
+
+    for source_type, preview_text in (
+        ("summary", job.summary_preview_text),
+        ("mindmap", job.mindmap_preview_text),
+    ):
+        snippet = _build_snippet(preview_text)
+        if snippet:
+            references.append(
+                QAAnswerReferenceShell(
+                    source_type=source_type,
+                    segment_id=None,
+                    start_seconds=None,
+                    end_seconds=None,
+                    snippet=snippet,
+                )
+            )
+
+    return tuple(references)
 
 
 def qa_is_ready(
@@ -143,4 +194,5 @@ def answer_job_question(job: AnalysisJob, question: str) -> QAAnswerShell:
             _build_reference("Summary", job.summary_preview_text),
             _build_reference("Mind map", job.mindmap_preview_text),
         ),
+        structured_references=_build_structured_references(job),
     )

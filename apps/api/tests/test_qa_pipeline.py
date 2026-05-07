@@ -1,5 +1,12 @@
-from app.models import JobStatus
-from app.services.qa_pipeline import _build_reference, describe_qa_shell, qa_is_ready
+import json
+
+from app.models import AnalysisJob, InputMode, JobStatus
+from app.services.qa_pipeline import (
+    _build_reference,
+    answer_job_question,
+    describe_qa_shell,
+    qa_is_ready,
+)
 
 
 def test_qa_requires_three_or_more_grounded_chunks() -> None:
@@ -93,3 +100,39 @@ def test_build_reference_keeps_exact_threshold_without_ellipsis() -> None:
 
 def test_build_reference_falls_back_when_preview_is_whitespace() -> None:
     assert _build_reference("Summary", "   \n\t  ") == "Summary: shell preview unavailable"
+
+
+def test_answer_job_question_includes_structured_transcript_reference() -> None:
+    job = AnalysisJob(
+        input_mode=InputMode.PUBLIC_VIDEO,
+        source_url="https://example.com/video",
+        stage="mindmap_generated",
+        status=JobStatus.RUNNING,
+        transcript_segment_count=3,
+        transcript_preview_text="Transcript shell generated for sample.wav.",
+        transcript_source_segments_json=json.dumps(
+            [
+                {
+                    "id": "segment-1",
+                    "start_seconds": 3,
+                    "end_seconds": 8,
+                    "text": "Opening segment explains the release decision.",
+                }
+            ]
+        ),
+        summary_status="ready",
+        summary_preview_text="Summary shell generated from transcript preview.",
+        mindmap_status="ready",
+        mindmap_preview_text="Mind map shell generated from summary preview.",
+    )
+
+    answer = answer_job_question(job, "What should I review next?")
+
+    assert answer.references[0].startswith("Transcript:")
+    assert answer.structured_references[0].source_type == "transcript"
+    assert answer.structured_references[0].segment_id == "segment-1"
+    assert answer.structured_references[0].start_seconds == 3.0
+    assert answer.structured_references[0].end_seconds == 8.0
+    assert answer.structured_references[0].snippet == (
+        "Opening segment explains the release decision."
+    )
