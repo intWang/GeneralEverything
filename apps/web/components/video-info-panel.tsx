@@ -1,9 +1,12 @@
-import type { InputMode } from "../lib/types";
+import type { Diagnostic, DownloadFormat, DownloadProgress, InputMode } from "../lib/types";
 import styles from "../app/homepage.module.css";
 
 type VideoInfoPanelProps = {
   detectedLanguageName?: string | null;
   description?: string | null;
+  diagnostics?: Diagnostic[] | null;
+  downloadFormats?: DownloadFormat[] | null;
+  downloadProgress?: DownloadProgress | null;
   durationSeconds?: number | null;
   inputMode?: InputMode | null;
   jobId?: string;
@@ -45,9 +48,24 @@ function formatPlatformLabel(sourceUrl?: string | null, inputMode?: InputMode | 
   }
 }
 
+function formatDownloadPercent(downloadProgress?: DownloadProgress | null) {
+  if (downloadProgress?.percent == null) {
+    return "Pending";
+  }
+
+  return `${downloadProgress.percent}%`;
+}
+
+function getFormatLabel(format: DownloadFormat) {
+  return format.format_label;
+}
+
 export function VideoInfoPanel({
   detectedLanguageName,
   description,
+  diagnostics,
+  downloadFormats,
+  downloadProgress,
   durationSeconds,
   inputMode,
   jobId,
@@ -59,6 +77,8 @@ export function VideoInfoPanel({
   const sourceLabel = sourceName || sourceUrl || "Pending analysis";
   const platformLabel = formatPlatformLabel(sourceUrl, inputMode);
   const formattedDuration = formatDuration(durationSeconds);
+  const hasDownloadFormats = Boolean(downloadFormats?.length);
+  const hasDiagnostics = Boolean(diagnostics?.length);
 
   return (
     <section aria-label="Video information" className={styles.panel}>
@@ -122,7 +142,34 @@ export function VideoInfoPanel({
           <dt className={styles.infoLabel}>Description</dt>
           <dd className={styles.infoValue}>{description || "Pending analysis"}</dd>
         </div>
+        {downloadProgress ? (
+          <div>
+            <dt className={styles.infoLabel}>Download progress</dt>
+            <dd className={styles.infoValue}>{formatDownloadPercent(downloadProgress)}</dd>
+          </div>
+        ) : null}
+        {hasDownloadFormats ? (
+          <div>
+            <dt className={styles.infoLabel}>Download formats</dt>
+            <dd className={styles.infoValue}>
+              {downloadFormats?.map((format) => getFormatLabel(format)).join(", ")}
+            </dd>
+          </div>
+        ) : null}
       </dl>
+      {hasDiagnostics ? (
+        <section aria-label="Diagnostics" className={styles.workspace}>
+          <h3 className={styles.workspaceTitle}>Diagnostics</h3>
+          <ul className={styles.historyList}>
+            {diagnostics?.map((diagnostic) => (
+              <li key={`${diagnostic.stage}-${diagnostic.reason}-${diagnostic.message}`}>
+                <p className={styles.modeNoticeTitle}>{diagnostic.message}</p>
+                <p className={styles.modeNoticeBody}>{diagnostic.suggestion}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </section>
   );
 }

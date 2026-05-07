@@ -16,12 +16,39 @@ export type JobStage =
   | "building_mindmap"
   | (string & {});
 
+export type DownloadProgress = {
+  downloaded_bytes?: number | null;
+  eta_seconds?: number | null;
+  percent?: number | null;
+  speed_bytes_per_second?: number | null;
+  status: "queued" | "probing" | "downloading" | "ready" | "failed" | (string & {});
+  total_bytes?: number | null;
+};
+
+export type DownloadFormat = {
+  container?: string | null;
+  format_id: string;
+  format_label: string;
+  kind: "video" | "audio" | "subtitle" | "thumbnail" | "report" | (string & {});
+  resolution?: string | null;
+};
+
+export type Diagnostic = {
+  message: string;
+  reason: string;
+  stage: string;
+  suggestion: string;
+};
+
 export type JobRecord = {
   created_at: string;
   description: string | null;
   duration_seconds: number | null;
   detected_language_code?: string | null;
   detected_language_name?: string | null;
+  diagnostics?: Diagnostic[] | null;
+  download_formats?: DownloadFormat[] | null;
+  download_progress?: DownloadProgress | null;
   id: string;
   input_mode: InputMode;
   mindmap_node_count?: number | null;

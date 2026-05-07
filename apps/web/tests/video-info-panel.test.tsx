@@ -63,3 +63,59 @@ test("falls back to pending copy when metadata is still unavailable", () => {
   expect(screen.getByText("Example")).toBeInTheDocument();
   expect(screen.getByText("https://example.com/video")).toBeInTheDocument();
 });
+
+test("renders download progress", () => {
+  render(
+    <VideoInfoPanel
+      downloadProgress={{
+        percent: 50,
+        status: "downloading",
+      }}
+      inputMode="public_video"
+      sourceUrl="https://example.com/video"
+    />,
+  );
+
+  expect(screen.getByText("Download progress")).toBeInTheDocument();
+  expect(screen.getByText("50%")).toBeInTheDocument();
+});
+
+test("renders available download formats", () => {
+  render(
+    <VideoInfoPanel
+      downloadFormats={[
+        {
+          format_id: "rc-stream",
+          format_label: "RingCentral recording stream",
+          kind: "video",
+        },
+      ]}
+      inputMode="ringcentral_recording"
+      sourceUrl="https://example.com/recording"
+    />,
+  );
+
+  expect(screen.getByText("RingCentral recording stream")).toBeInTheDocument();
+});
+
+test("renders diagnostics with suggestions", () => {
+  render(
+    <VideoInfoPanel
+      diagnostics={[
+        {
+          message: "Could not read the recording stream.",
+          reason: "recording_unavailable",
+          stage: "probe",
+          suggestion: "Check that the sharing link is still active.",
+        },
+      ]}
+      inputMode="ringcentral_recording"
+      sourceUrl="https://example.com/recording"
+    />,
+  );
+
+  expect(screen.getByText("Could not read the recording stream.")).toBeInTheDocument();
+  expect(
+    screen.getByText("Check that the sharing link is still active."),
+  ).toBeInTheDocument();
+});

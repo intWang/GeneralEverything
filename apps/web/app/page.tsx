@@ -648,6 +648,9 @@ export default function HomePage() {
                 <VideoInfoPanel
                   detectedLanguageName={jobState.detected_language_name}
                   description={jobState.description}
+                  diagnostics={jobState.diagnostics}
+                  downloadFormats={jobState.download_formats}
+                  downloadProgress={jobState.download_progress}
                   durationSeconds={jobState.duration_seconds}
                   inputMode={jobState.input_mode}
                   jobId={jobState.id}
