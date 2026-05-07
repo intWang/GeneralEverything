@@ -204,6 +204,42 @@ test("renders mind map branches as a visual node map", () => {
   expect(screen.getByText("Customer follow-up")).toBeInTheDocument();
 });
 
+test("copies the mind map outline to the clipboard", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  render(
+    <AITabs
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapNodeCount={4}
+      mindmapPreviewText="Product launch, training, customer follow-up"
+      mindmapStatus="ready"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Mind Map" }));
+  fireEvent.click(screen.getByRole("button", { name: "Copy mind map" }));
+
+  await waitFor(() => {
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "Central idea",
+        "AI analysis",
+        "",
+        "Branches",
+        "- Product launch",
+        "- Training",
+        "- Customer follow-up",
+      ].join("\n"),
+    );
+  });
+  expect(screen.getByText("Mind map copied")).toBeInTheDocument();
+});
+
 test("replaces the provisional summary with the finalized backend summary when it arrives", () => {
   const { rerender } = render(
     <AITabs

@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import styles from "../app/homepage.module.css";
 import type { TabShellState } from "./summary-tab";
 
@@ -21,6 +23,22 @@ function formatBranchLabel(branch: string) {
   }
 
   return branch.charAt(0).toUpperCase() + branch.slice(1);
+}
+
+function buildMindMapClipboardText({
+  centralIdea,
+  branches,
+}: {
+  branches: readonly string[];
+  centralIdea: string;
+}) {
+  return [
+    "Central idea",
+    centralIdea,
+    "",
+    "Branches",
+    ...branches.map((branch) => `- ${formatBranchLabel(branch)}`),
+  ].join("\n");
 }
 
 const SHELL_COPY: Record<
@@ -65,6 +83,7 @@ export function MindMapTab({
   shellState = "queued",
 }: MindMapTabProps) {
   const copy = SHELL_COPY[shellState];
+  const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | "idle">("idle");
   const visualBranches = previewText
     ? previewText
         .split(",")
@@ -72,6 +91,26 @@ export function MindMapTab({
         .filter(Boolean)
         .slice(0, 6)
     : Array.from(branches);
+  const centralIdea = previewText ? "AI analysis" : "Summary backbone";
+
+  async function copyMindMapToClipboard() {
+    if (!navigator.clipboard?.writeText) {
+      setCopyStatus("failed");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(
+        buildMindMapClipboardText({
+          branches: visualBranches,
+          centralIdea,
+        }),
+      );
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
 
   return (
     <div>
@@ -90,10 +129,27 @@ export function MindMapTab({
           ) : null}
         </ul>
       ) : null}
+      {visualBranches.length ? (
+        <div className={styles.mindMapActionRow}>
+          <button
+            className={styles.mindMapCopyButton}
+            onClick={() => void copyMindMapToClipboard()}
+            type="button"
+          >
+            Copy mind map
+          </button>
+          {copyStatus === "copied" ? (
+            <span className={styles.mindMapCopyStatus}>Mind map copied</span>
+          ) : null}
+          {copyStatus === "failed" ? (
+            <span className={styles.mindMapCopyStatus}>Copy unavailable</span>
+          ) : null}
+        </div>
+      ) : null}
       <div aria-label="Mind map preview" className={styles.mindMapCanvas}>
         <div className={styles.mindMapCore}>
           <span className={styles.mindMapCoreLabel}>Central idea</span>
-          <strong>{previewText ? "AI analysis" : "Summary backbone"}</strong>
+          <strong>{centralIdea}</strong>
         </div>
         <div className={styles.mindMapBranchGrid}>
           {visualBranches.map((branch, index) => (
