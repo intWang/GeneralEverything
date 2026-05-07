@@ -12,7 +12,7 @@ import { StatusTimeline } from "../components/status-timeline";
 import { VideoInfoPanel } from "../components/video-info-panel";
 import { getJob, listJobs } from "../lib/api";
 import { subscribeToJobEvents } from "../lib/sse";
-import type { InputMode, JobRecord } from "../lib/types";
+import type { DownloadProgress, InputMode, JobRecord } from "../lib/types";
 import type { CreateJobResponse } from "../lib/api";
 
 const KNOWN_JOB_STATUSES = ["queued", "running", "failed", "completed"] as const;
@@ -197,6 +197,48 @@ function mergeJobStatusUpdate(
     stage: stage ?? currentJob.stage,
     status,
   });
+}
+
+type NullableProgressNumberField = Exclude<keyof DownloadProgress, "status">;
+
+function mergeDownloadProgressField(
+  payload: Record<string, unknown>,
+  currentProgress: DownloadProgress | null | undefined,
+  field: NullableProgressNumberField,
+) {
+  if (!Object.prototype.hasOwnProperty.call(payload, field)) {
+    return currentProgress?.[field];
+  }
+
+  const value = payload[field];
+
+  if (typeof value === "number" || value === null) {
+    return value;
+  }
+
+  return currentProgress?.[field];
+}
+
+function getDownloadProgressStage(
+  currentStage: JobRecord["stage"],
+  progressStatus: string,
+) {
+  if (progressStatus !== "downloading") {
+    return currentStage;
+  }
+
+  const currentStageRank = STAGE_RANK.get(currentStage);
+  const downloadingStageRank = STAGE_RANK.get("downloading");
+
+  if (
+    currentStageRank === undefined ||
+    downloadingStageRank === undefined ||
+    currentStageRank > downloadingStageRank
+  ) {
+    return currentStage;
+  }
+
+  return "downloading";
 }
 
 export default function HomePage() {
@@ -458,6 +500,85 @@ export default function HomePage() {
                   ? summaryPayload.status
                   : "processing",
             });
+          });
+          return;
+        }
+
+        if (event.event === "video.download.progress") {
+          const payload = event.data;
+          if (
+            !payload ||
+            typeof payload !== "object" ||
+            !("progress" in payload) ||
+            typeof payload.progress !== "object" ||
+            payload.progress === null
+          ) {
+            return;
+          }
+
+          if (
+            ("job_id" in payload &&
+              typeof payload.job_id === "string" &&
+              payload.job_id !== activeJobId) ||
+            activeJobIdRef.current !== activeJobId
+          ) {
+            return;
+          }
+
+          const progressPayload = payload.progress as Record<string, unknown>;
+          if (typeof progressPayload.status !== "string") {
+            return;
+          }
+
+          setJobState((currentState) => {
+            if (currentState?.id !== activeJobId) {
+              return currentState;
+            }
+
+            const downloadProgress = {
+              ...(currentState.download_progress ?? {}),
+              downloaded_bytes:
+                mergeDownloadProgressField(
+                  progressPayload,
+                  currentState.download_progress,
+                  "downloaded_bytes",
+                ),
+              eta_seconds:
+                mergeDownloadProgressField(
+                  progressPayload,
+                  currentState.download_progress,
+                  "eta_seconds",
+                ),
+              percent:
+                mergeDownloadProgressField(
+                  progressPayload,
+                  currentState.download_progress,
+                  "percent",
+                ),
+              speed_bytes_per_second:
+                mergeDownloadProgressField(
+                  progressPayload,
+                  currentState.download_progress,
+                  "speed_bytes_per_second",
+                ),
+              status: progressPayload.status,
+              total_bytes:
+                mergeDownloadProgressField(
+                  progressPayload,
+                  currentState.download_progress,
+                  "total_bytes",
+                ),
+            };
+
+            return {
+              ...currentState,
+              download_progress: downloadProgress,
+              download_status: progressPayload.status,
+              stage: getDownloadProgressStage(
+                currentState.stage,
+                progressPayload.status,
+              ),
+            };
           });
           return;
         }

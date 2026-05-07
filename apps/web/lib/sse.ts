@@ -18,6 +18,7 @@ const DEFAULT_EVENT_NAMES = [
   "qa.ready",
   "transcript.segment",
   "summary.partial",
+  "video.download.progress",
 ] as const;
 
 function parseEventData(data: string) {

@@ -49,6 +49,7 @@ export type JobRecord = {
   diagnostics?: Diagnostic[] | null;
   download_formats?: DownloadFormat[] | null;
   download_progress?: DownloadProgress | null;
+  download_status?: string | null;
   id: string;
   input_mode: InputMode;
   mindmap_node_count?: number | null;

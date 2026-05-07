@@ -17,12 +17,21 @@ vi.mock("../lib/sse", () => ({
   subscribeToJobEvents: vi.fn(),
 }));
 
+const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.history.replaceState({}, "", "/");
   vi.mocked(sse.subscribeToJobEvents).mockReturnValue(() => undefined);
   vi.mocked(api.listJobs).mockResolvedValue([]);
   vi.useRealTimers();
+});
+
+afterEach(() => {
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: originalScrollIntoView,
+  });
 });
 
 test("renders a url-first homepage with lightweight supporting sections", () => {
@@ -595,6 +604,244 @@ test("streams partial summary updates into the summary tab as events arrive", as
   expect(screen.getByText("Live summary draft")).toBeInTheDocument();
   expect(screen.getByText("产品发布时间已确认")).toBeInTheDocument();
   expect(screen.getByText("下周将进行团队培训")).toBeInTheDocument();
+});
+
+test("streams download progress into the active video info panel only", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=37373737-3737-3737-3737-373737373737",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T16:25:00Z",
+    id: "37373737-3737-3737-3737-373737373737",
+    input_mode: "public_video",
+    source_url: "https://example.com/live-download",
+    stage: "queued_download",
+    status: "running",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:25:00Z",
+      id: "37373737-3737-3737-3737-373737373737",
+      input_mode: "public_video",
+      source_url: "https://example.com/live-download",
+      stage: "queued_download",
+      status: "running",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 37373737-3737-3737-3737-373737373737 is queued for download preparation.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  handlers?.onEvent?.({
+    event: "video.download.progress",
+    data: {
+      job_id: "48484848-4848-4848-4848-484848484848",
+      progress: {
+        downloaded_bytes: 750,
+        eta_seconds: 2,
+        percent: 75,
+        speed_bytes_per_second: 300,
+        status: "downloading",
+        total_bytes: 1000,
+      },
+    },
+  });
+
+  expect(screen.queryByText("Download progress")).not.toBeInTheDocument();
+  expect(screen.queryByText("75%")).not.toBeInTheDocument();
+
+  handlers?.onEvent?.({
+    event: "video.download.progress",
+    data: {
+      job_id: "37373737-3737-3737-3737-373737373737",
+      progress: {
+        downloaded_bytes: 500,
+        eta_seconds: 5,
+        percent: 50,
+        speed_bytes_per_second: 100,
+        status: "downloading",
+        total_bytes: 1000,
+      },
+    },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("Download progress")).toBeInTheDocument();
+  });
+
+  expect(screen.getByText("50%")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Job 37373737-3737-3737-3737-373737373737 is progressing through the download shell.",
+    ),
+  ).toBeInTheDocument();
+});
+
+test("keeps later stages when late download progress arrives", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=38383838-3838-3838-3838-383838383838",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T16:30:00Z",
+    id: "38383838-3838-3838-3838-383838383838",
+    input_mode: "public_video",
+    source_url: "https://example.com/late-download-progress",
+    stage: "download_ready",
+    status: "running",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:30:00Z",
+      id: "38383838-3838-3838-3838-383838383838",
+      input_mode: "public_video",
+      source_url: "https://example.com/late-download-progress",
+      stage: "download_ready",
+      status: "running",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 38383838-3838-3838-3838-383838383838 is ready for the download step.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  await act(async () => {
+    handlers?.onEvent?.({
+      event: "video.download.progress",
+      data: {
+        job_id: "38383838-3838-3838-3838-383838383838",
+        progress: {
+          percent: 50,
+          status: "downloading",
+        },
+      },
+    });
+  });
+
+  expect(screen.getByText("Download progress")).toBeInTheDocument();
+  expect(screen.getByText("50%")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Job 38383838-3838-3838-3838-383838383838 is ready for the download step.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      "Job 38383838-3838-3838-3838-383838383838 is progressing through the download shell.",
+    ),
+  ).not.toBeInTheDocument();
+});
+
+test("clears nullable download progress fields from later events", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=39393939-3939-3939-3939-393939393939",
+  );
+  getJob.mockResolvedValue({
+    created_at: "2026-05-04T16:35:00Z",
+    download_progress: {
+      percent: 50,
+      status: "downloading",
+    },
+    id: "39393939-3939-3939-3939-393939393939",
+    input_mode: "public_video",
+    source_url: "https://example.com/null-progress",
+    stage: "downloading",
+    status: "running",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:35:00Z",
+      download_progress: {
+        percent: 50,
+        status: "downloading",
+      },
+      id: "39393939-3939-3939-3939-393939393939",
+      input_mode: "public_video",
+      source_url: "https://example.com/null-progress",
+      stage: "downloading",
+      status: "running",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByText("50%")).toBeInTheDocument();
+  });
+
+  await act(async () => {
+    handlers?.onEvent?.({
+      event: "video.download.progress",
+      data: {
+        job_id: "39393939-3939-3939-3939-393939393939",
+        progress: {
+          percent: null,
+          status: "downloading",
+        },
+      },
+    });
+  });
+
+  expect(screen.getByText("Download progress")).toBeInTheDocument();
+  expect(screen.getByText("Pending")).toBeInTheDocument();
+  expect(screen.queryByText("50%")).not.toBeInTheDocument();
 });
 
 test("ignores out-of-order status events for the same active job when refresh fails", async () => {
