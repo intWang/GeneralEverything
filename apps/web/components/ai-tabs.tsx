@@ -630,6 +630,7 @@ export function AITabs({
               className={styles.analysisBundleDownloadLink}
               download={analysisBundleFilename}
               href={analysisBundleDownloadHref}
+              title={`Download ${analysisBundleFilename}`}
             >
               Download .md
             </a>
