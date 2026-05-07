@@ -1,10 +1,12 @@
 import { useState } from "react";
 
 import styles from "../app/homepage.module.css";
+import type { MindMapNode } from "../lib/types";
 import type { TabShellState } from "./summary-tab";
 
 type MindMapTabProps = {
   branches?: readonly string[];
+  nodes?: MindMapNode | null;
   nodeCount?: number | null;
   previewText?: string | null;
   shellState?: TabShellState;
@@ -39,6 +41,80 @@ function buildMindMapClipboardText({
     "Branches",
     ...branches.map((branch) => `- ${formatBranchLabel(branch)}`),
   ].join("\n");
+}
+
+function flattenMindMapLabels(node: MindMapNode | null | undefined): string[] {
+  if (!node) {
+    return [];
+  }
+
+  return [
+    node.label,
+    ...(node.children ?? []).flatMap((child) => flattenMindMapLabels(child)),
+  ];
+}
+
+function MindMapTreeNode({
+  node,
+  expandedNodeIds,
+  level = 0,
+  toggleNode,
+}: {
+  expandedNodeIds: ReadonlySet<string>;
+  level?: number;
+  node: MindMapNode;
+  toggleNode: (nodeId: string) => void;
+}) {
+  const children = node.children ?? [];
+  const references = node.references ?? [];
+  const hasChildren = children.length > 0;
+  const isExpanded = expandedNodeIds.has(node.id);
+
+  return (
+    <li className={styles.tabHintItem}>
+      <div data-mindmap-level={level}>
+        {hasChildren ? (
+          <>
+            <button
+              aria-expanded={isExpanded}
+              aria-label={`${isExpanded ? "Collapse" : "Expand"} ${node.label}`}
+              className={styles.mindMapCopyButton}
+              onClick={() => toggleNode(node.id)}
+              type="button"
+            >
+              {isExpanded ? "Collapse" : "Expand"}
+            </button>
+            <strong>{node.label}</strong>
+          </>
+        ) : (
+          <strong>{node.label}</strong>
+        )}
+        {node.summary ? <p className={styles.tabSectionBody}>{node.summary}</p> : null}
+        {references.length ? (
+          <div className={styles.mindMapActionRow}>
+            {references.map((reference, index) => (
+              <span className={styles.mindMapCopyStatus} key={`${node.id}-${index}`}>
+                {reference.label ?? reference.segment_id ?? "Source reference"}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {hasChildren && isExpanded ? (
+        <ul className={styles.tabHintList}>
+          {children.map((child) => (
+            <MindMapTreeNode
+              expandedNodeIds={expandedNodeIds}
+              key={child.id}
+              level={level + 1}
+              node={child}
+              toggleNode={toggleNode}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
 }
 
 const SHELL_COPY: Record<
@@ -78,12 +154,15 @@ const SHELL_COPY: Record<
 
 export function MindMapTab({
   branches = DEFAULT_BRANCHES,
+  nodes,
   nodeCount,
   previewText,
   shellState = "queued",
 }: MindMapTabProps) {
   const copy = SHELL_COPY[shellState];
   const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | "idle">("idle");
+  const [collapsedNodeIds, setCollapsedNodeIds] = useState<Set<string>>(() => new Set());
+  const treeLabels = flattenMindMapLabels(nodes).slice(1);
   const visualBranches = previewText
     ? previewText
         .split(",")
@@ -91,7 +170,36 @@ export function MindMapTab({
         .filter(Boolean)
         .slice(0, 6)
     : Array.from(branches);
-  const centralIdea = previewText ? "AI analysis" : "Summary backbone";
+  const copyBranches = treeLabels.length ? treeLabels : visualBranches;
+  const centralIdea = nodes?.label ?? (previewText ? "AI analysis" : "Summary backbone");
+
+  function collectExpandedIds(node: MindMapNode | null | undefined, target: Set<string>) {
+    if (!node) {
+      return;
+    }
+
+    if (!collapsedNodeIds.has(node.id)) {
+      target.add(node.id);
+    }
+
+    (node.children ?? []).forEach((child) => collectExpandedIds(child, target));
+  }
+
+  const treeExpandedNodeIds = new Set<string>();
+  collectExpandedIds(nodes, treeExpandedNodeIds);
+
+  function toggleNode(nodeId: string) {
+    setCollapsedNodeIds((currentIds) => {
+      const nextIds = new Set(currentIds);
+      if (nextIds.has(nodeId)) {
+        nextIds.delete(nodeId);
+      } else {
+        nextIds.add(nodeId);
+      }
+
+      return nextIds;
+    });
+  }
 
   async function copyMindMapToClipboard() {
     if (!navigator.clipboard?.writeText) {
@@ -102,7 +210,7 @@ export function MindMapTab({
     try {
       await navigator.clipboard.writeText(
         buildMindMapClipboardText({
-          branches: visualBranches,
+          branches: copyBranches,
           centralIdea,
         }),
       );
@@ -124,12 +232,12 @@ export function MindMapTab({
       {nodeCount !== null && nodeCount !== undefined ? (
         <ul className={styles.tabHintList}>
           <li className={styles.tabHintItem}>Mind map nodes ready: {nodeCount}</li>
-          {previewText ? (
+          {!nodes && previewText ? (
             <li className={styles.tabHintItem}>Preview: {previewText}</li>
           ) : null}
         </ul>
       ) : null}
-      {visualBranches.length ? (
+      {copyBranches.length ? (
         <div className={styles.mindMapActionRow}>
           <button
             className={styles.mindMapCopyButton}
@@ -146,27 +254,39 @@ export function MindMapTab({
           ) : null}
         </div>
       ) : null}
-      <div aria-label="Mind map preview" className={styles.mindMapCanvas}>
-        <div className={styles.mindMapCore}>
-          <span className={styles.mindMapCoreLabel}>Central idea</span>
-          <strong>{centralIdea}</strong>
-        </div>
-        <div className={styles.mindMapBranchGrid}>
-          {visualBranches.map((branch, index) => (
-            <div className={styles.mindMapNode} data-node-index={index} key={branch}>
-              <span className={styles.mindMapConnector} aria-hidden="true" />
-              {formatBranchLabel(branch)}
+      {nodes ? (
+        <ul aria-label="Structured mind map tree" className={styles.tabHintList}>
+          <MindMapTreeNode
+            expandedNodeIds={treeExpandedNodeIds}
+            node={nodes}
+            toggleNode={toggleNode}
+          />
+        </ul>
+      ) : (
+        <>
+          <div aria-label="Mind map preview" className={styles.mindMapCanvas}>
+            <div className={styles.mindMapCore}>
+              <span className={styles.mindMapCoreLabel}>Central idea</span>
+              <strong>{centralIdea}</strong>
             </div>
-          ))}
-        </div>
-      </div>
-      <ul className={styles.tabHintList}>
-        {branches.map((branch) => (
-          <li className={styles.tabHintItem} key={branch}>
-            {branch}
-          </li>
-        ))}
-      </ul>
+            <div className={styles.mindMapBranchGrid}>
+              {visualBranches.map((branch, index) => (
+                <div className={styles.mindMapNode} data-node-index={index} key={branch}>
+                  <span className={styles.mindMapConnector} aria-hidden="true" />
+                  {formatBranchLabel(branch)}
+                </div>
+              ))}
+            </div>
+          </div>
+          <ul className={styles.tabHintList}>
+            {branches.map((branch) => (
+              <li className={styles.tabHintItem} key={branch}>
+                {branch}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

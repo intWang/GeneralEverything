@@ -125,6 +125,99 @@ def _normalize_summary_structured(value: object) -> dict | None:
     }
 
 
+def _normalize_mindmap_reference(reference: object) -> dict | None:
+    if not isinstance(reference, dict):
+        return None
+
+    segment_id = reference.get("segment_id")
+    if segment_id is not None and not isinstance(segment_id, str):
+        return None
+
+    start_seconds = reference.get("start_seconds")
+    if start_seconds is not None and not isinstance(start_seconds, int | float):
+        return None
+
+    end_seconds = reference.get("end_seconds")
+    if end_seconds is not None and not isinstance(end_seconds, int | float):
+        return None
+
+    label = reference.get("label")
+    if label is not None and not isinstance(label, str):
+        return None
+
+    normalized: dict = {
+        "segment_id": segment_id,
+        "start_seconds": float(start_seconds) if start_seconds is not None else None,
+        "end_seconds": float(end_seconds) if end_seconds is not None else None,
+        "label": label,
+    }
+
+    return normalized
+
+
+def _normalize_mindmap_references(value: object) -> list[dict] | None:
+    if value is None:
+        return []
+
+    if not isinstance(value, list):
+        return None
+
+    normalized_references: list[dict] = []
+    for reference in value:
+        normalized_reference = _normalize_mindmap_reference(reference)
+        if normalized_reference is None:
+            return None
+        normalized_references.append(normalized_reference)
+
+    return normalized_references
+
+
+MAX_MINDMAP_NODE_DEPTH = 64
+
+
+def _normalize_mindmap_node(value: object, depth: int = 0) -> dict | None:
+    if depth > MAX_MINDMAP_NODE_DEPTH:
+        return None
+
+    if not isinstance(value, dict):
+        return None
+
+    node_id = value.get("id")
+    label = value.get("label")
+    if not isinstance(node_id, str) or not isinstance(label, str):
+        return None
+
+    summary = value.get("summary")
+    if summary is not None and not isinstance(summary, str):
+        return None
+
+    children_value = value.get("children", [])
+    if not isinstance(children_value, list):
+        return None
+
+    references = _normalize_mindmap_references(value.get("references"))
+    if references is None:
+        return None
+
+    children: list[dict] = []
+    for child in children_value:
+        normalized_child = _normalize_mindmap_node(child, depth + 1)
+        if normalized_child is None:
+            return None
+        children.append(normalized_child)
+
+    normalized_node = {
+        "id": node_id,
+        "label": label,
+        "children": children,
+        "references": references,
+    }
+    if summary is not None:
+        normalized_node["summary"] = summary
+
+    return normalized_node
+
+
 class InputMode(str, PyEnum):
     PUBLIC_VIDEO = "public_video"
     RINGCENTRAL_RECORDING = "ringcentral_recording"
@@ -178,6 +271,7 @@ class AnalysisJob(Base):
     summary_key_points_count: Mapped[int | None] = mapped_column(nullable=True)
     mindmap_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     mindmap_preview_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mindmap_nodes_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     mindmap_node_count: Mapped[int | None] = mapped_column(nullable=True)
     status: Mapped[JobStatus] = mapped_column(
         Enum(JobStatus, name="job_status"),
@@ -297,3 +391,18 @@ class AnalysisJob(Base):
             return None
 
         return json.loads(self.summary_translations_json)
+
+    @property
+    def mindmap_nodes(self) -> dict | None:
+        if not self.mindmap_nodes_json:
+            return None
+
+        try:
+            mindmap_nodes = json.loads(self.mindmap_nodes_json)
+        except (RecursionError, json.JSONDecodeError, TypeError):
+            return None
+
+        try:
+            return _normalize_mindmap_node(mindmap_nodes)
+        except RecursionError:
+            return None

@@ -12,7 +12,14 @@ import { StatusTimeline } from "../components/status-timeline";
 import { VideoInfoPanel } from "../components/video-info-panel";
 import { getJob, listJobs } from "../lib/api";
 import { subscribeToJobEvents } from "../lib/sse";
-import type { DownloadProgress, InputMode, JobRecord, TranscriptSegment } from "../lib/types";
+import type {
+  DownloadProgress,
+  InputMode,
+  JobRecord,
+  MindMapNode,
+  MindMapReference,
+  TranscriptSegment,
+} from "../lib/types";
 import type { CreateJobResponse } from "../lib/api";
 
 const KNOWN_JOB_STATUSES = ["queued", "running", "failed", "completed"] as const;
@@ -233,6 +240,102 @@ function normalizeTranscriptSegments(value: unknown): TranscriptSegment[] | unde
   });
 
   return normalizedSegments;
+}
+
+function normalizeMindMapReference(value: unknown): MindMapReference | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const reference = value as Record<string, unknown>;
+  const segmentId = reference.segment_id;
+  const startSeconds = reference.start_seconds;
+  const endSeconds = reference.end_seconds;
+  const label = reference.label;
+
+  if (segmentId !== undefined && segmentId !== null && typeof segmentId !== "string") {
+    return null;
+  }
+
+  if (
+    startSeconds !== undefined &&
+    startSeconds !== null &&
+    typeof startSeconds !== "number"
+  ) {
+    return null;
+  }
+
+  if (
+    endSeconds !== undefined &&
+    endSeconds !== null &&
+    typeof endSeconds !== "number"
+  ) {
+    return null;
+  }
+
+  if (label !== undefined && label !== null && typeof label !== "string") {
+    return null;
+  }
+
+  return {
+    end_seconds: typeof endSeconds === "number" ? endSeconds : null,
+    label: typeof label === "string" ? label : null,
+    segment_id: typeof segmentId === "string" ? segmentId : null,
+    start_seconds: typeof startSeconds === "number" ? startSeconds : null,
+  };
+}
+
+function normalizeMindMapNode(value: unknown, depth = 0): MindMapNode | null {
+  if (depth > 64 || !value || typeof value !== "object") {
+    return null;
+  }
+
+  const node = value as Record<string, unknown>;
+  if (typeof node.id !== "string" || typeof node.label !== "string") {
+    return null;
+  }
+
+  if (
+    node.summary !== undefined &&
+    node.summary !== null &&
+    typeof node.summary !== "string"
+  ) {
+    return null;
+  }
+
+  if (node.children !== undefined && !Array.isArray(node.children)) {
+    return null;
+  }
+
+  if (node.references !== undefined && !Array.isArray(node.references)) {
+    return null;
+  }
+
+  const children: MindMapNode[] = [];
+  for (const child of node.children ?? []) {
+    const normalizedChild = normalizeMindMapNode(child, depth + 1);
+    if (!normalizedChild) {
+      return null;
+    }
+    children.push(normalizedChild);
+  }
+
+  const references: MindMapReference[] = [];
+  for (const reference of node.references ?? []) {
+    const normalizedReference = normalizeMindMapReference(reference);
+    if (!normalizedReference) {
+      return null;
+    }
+    references.push(normalizedReference);
+  }
+
+  return {
+    children,
+    id: node.id,
+    label: node.label,
+    references,
+    summary: typeof node.summary === "string" ? node.summary : null,
+  };
 }
 
 type NullableProgressNumberField = Exclude<keyof DownloadProgress, "status">;
@@ -557,6 +660,50 @@ export default function HomePage() {
           return;
         }
 
+        if (event.event === "mindmap.shell") {
+          const payload = event.data;
+          if (
+            !payload ||
+            typeof payload !== "object" ||
+            !("mindmap" in payload) ||
+            typeof payload.mindmap !== "object" ||
+            payload.mindmap === null
+          ) {
+            return;
+          }
+
+          const mindmapPayload = payload.mindmap as Record<string, unknown>;
+          const mindmapNodes = normalizeMindMapNode(mindmapPayload.mindmap_nodes);
+          setJobState((currentState) => {
+            if (currentState?.id !== activeJobId) {
+              return currentState;
+            }
+
+            return mergeJobSnapshot(currentState, {
+              ...currentState,
+              mindmap_node_count:
+                typeof mindmapPayload.node_count === "number"
+                  ? mindmapPayload.node_count
+                  : currentState.mindmap_node_count,
+              mindmap_nodes: mindmapNodes,
+              mindmap_preview_text:
+                typeof mindmapPayload.preview_text === "string"
+                  ? mindmapPayload.preview_text
+                  : currentState.mindmap_preview_text,
+              mindmap_status:
+                typeof mindmapPayload.status === "string"
+                  ? mindmapPayload.status
+                  : "ready",
+              stage:
+                typeof mindmapPayload.stage === "string"
+                  ? (mindmapPayload.stage as JobRecord["stage"])
+                  : "mindmap_generated",
+              status: "running",
+            });
+          });
+          return;
+        }
+
         if (event.event === "video.download.progress") {
           const payload = event.data;
           if (
@@ -845,6 +992,7 @@ export default function HomePage() {
                   jobStage={jobState.stage}
                   jobStatus={jobState.status}
                   mindmapNodeCount={jobState.mindmap_node_count}
+                  mindmapNodes={jobState.mindmap_nodes}
                   mindmapPreviewText={jobState.mindmap_preview_text}
                   mindmapStatus={jobState.mindmap_status}
                   summaryKeyPointsCount={jobState.summary_key_points_count}

@@ -29,6 +29,7 @@ type AITabsProps = {
   jobStage?: string;
   jobStatus?: JobStatus;
   mindmapNodeCount?: JobRecord["mindmap_node_count"];
+  mindmapNodes?: JobRecord["mindmap_nodes"];
   mindmapPreviewText?: JobRecord["mindmap_preview_text"];
   mindmapStatus?: JobRecord["mindmap_status"];
   summaryKeyPointsCount?: JobRecord["summary_key_points_count"];
@@ -276,6 +277,14 @@ function extractMindMapBranches(previewText?: string | null): string[] {
     : [];
 }
 
+function extractMindMapNodeBranches(node?: JobRecord["mindmap_nodes"]): string[] {
+  if (!node) {
+    return [];
+  }
+
+  return (node.children ?? []).map((child) => child.label).filter(Boolean);
+}
+
 function buildAnalysisBundleText({
   mindmapBranches,
   summaryBullets,
@@ -362,6 +371,7 @@ export function AITabs({
   jobStage,
   jobStatus = "queued",
   mindmapNodeCount,
+  mindmapNodes,
   mindmapPreviewText,
   mindmapStatus,
   summaryKeyPointsCount,
@@ -527,14 +537,18 @@ export function AITabs({
     transcriptLanguage === "original"
       ? detectedLanguageName || "Original"
       : LANGUAGE_NAME_BY_CODE[transcriptLanguage] || transcriptLanguage;
+  const structuredMindmapBranches = extractMindMapNodeBranches(mindmapNodes);
+  const mindmapBranches = structuredMindmapBranches.length
+    ? structuredMindmapBranches
+    : extractMindMapBranches(mindmapPreviewText);
   const analysisBundleText = buildAnalysisBundleText({
-    mindmapBranches: extractMindMapBranches(mindmapPreviewText),
+    mindmapBranches,
     summaryBullets: effectiveSummarySourceBullets,
     summaryText: summaryDisplayText,
     transcriptText: transcriptDisplayText,
   });
   const analysisBundleContentLabels = buildAnalysisBundleContentLabels({
-    mindmapBranches: extractMindMapBranches(mindmapPreviewText),
+    mindmapBranches,
     summaryText: summaryDisplayText,
     transcriptText: transcriptDisplayText,
   });
@@ -869,6 +883,7 @@ export function AITabs({
                   ]
                 : undefined
             }
+            nodes={mindmapNodes}
             nodeCount={mindmapNodeCount}
             previewText={mindmapPreviewText}
             shellState={mindmapStatus === "failed" ? "failed" : shellStates.mindmap}

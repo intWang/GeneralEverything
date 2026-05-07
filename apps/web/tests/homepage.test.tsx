@@ -849,6 +849,93 @@ test("clears stale structured summary when final shell omits structured payload"
   expect(screen.queryByText("00:03")).not.toBeInTheDocument();
 });
 
+test("clears stale structured mind map nodes when shell payload is invalid", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=30303030-3030-3030-3030-303030303030",
+  );
+  getJob.mockResolvedValueOnce({
+    created_at: "2026-05-04T16:25:00Z",
+    id: "30303030-3030-3030-3030-303030303030",
+    input_mode: "public_video",
+    mindmap_nodes: {
+      id: "mindmap-root",
+      label: "Stale structured map",
+      children: [
+        {
+          id: "mindmap-stale",
+          label: "Stale branch",
+          children: [],
+          references: [],
+        },
+      ],
+      references: [],
+    },
+    mindmap_preview_text: "Stale preview",
+    mindmap_status: "ready",
+    source_url: "https://example.com/stale-mindmap",
+    stage: "mindmap_generated",
+    status: "running",
+    summary_status: "ready",
+    transcript_segment_count: 3,
+    transcript_status: "ready",
+  });
+  listJobs.mockResolvedValue([]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "AI output" })).toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Mind Map" }));
+  expect(screen.getByLabelText("Structured mind map tree")).toBeInTheDocument();
+  expect(screen.getByText("Stale branch")).toBeInTheDocument();
+
+  await act(async () => {
+    handlers?.onEvent?.({
+      event: "mindmap.shell",
+      data: {
+        job_id: "30303030-3030-3030-3030-303030303030",
+        mindmap: {
+          mindmap_nodes: {
+            id: "mindmap-invalid",
+            label: "Invalid structured map",
+            children: "bad",
+            references: [],
+          },
+          node_count: 1,
+          preview_text: "Legacy preview from invalid shell",
+          stage: "mindmap_generated",
+          status: "ready",
+        },
+      },
+    });
+  });
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("Mind map preview")).toBeInTheDocument();
+  });
+
+  expect(screen.queryByLabelText("Structured mind map tree")).not.toBeInTheDocument();
+  expect(screen.queryByText("Stale branch")).not.toBeInTheDocument();
+  expect(screen.getByText("Legacy preview from invalid shell")).toBeInTheDocument();
+});
+
 test("streams download progress into the active video info panel only", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);

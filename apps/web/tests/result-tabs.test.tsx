@@ -481,6 +481,70 @@ test("renders mind map branches as a visual node map", () => {
   expect(screen.getByText("Customer follow-up")).toBeInTheDocument();
 });
 
+test("expands and collapses a structured mind map branch", () => {
+  render(
+    <AITabs
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapNodes={{
+        id: "mindmap-root",
+        label: "Launch readiness",
+        summary: "Launch and enablement plan",
+        children: [
+          {
+            id: "mindmap-launch",
+            label: "Launch plan",
+            children: [
+              {
+                id: "mindmap-launch-date",
+                label: "Launch date is confirmed",
+                children: [],
+                references: [
+                  {
+                    segment_id: "segment-1",
+                    start_seconds: 3,
+                    end_seconds: 8,
+                    label: "00:03",
+                  },
+                ],
+              },
+            ],
+            references: [],
+          },
+        ],
+        references: [],
+      }}
+      mindmapPreviewText="Legacy preview should stay available"
+      mindmapStatus="ready"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Mind Map" }));
+
+  const tree = screen.getByLabelText("Structured mind map tree");
+  expect(tree).toBeInTheDocument();
+  expect(screen.queryByLabelText("Mind map preview")).not.toBeInTheDocument();
+  expect(within(tree).getByText("Launch readiness")).toBeInTheDocument();
+  expect(within(tree).getByText("Launch date is confirmed")).toBeInTheDocument();
+  expect(within(tree).getByText("00:03")).toBeInTheDocument();
+  expect(screen.queryByText("Legacy preview should stay available")).not.toBeInTheDocument();
+  expect(screen.queryByText("Summary backbone")).not.toBeInTheDocument();
+  expect(screen.queryByText("Key evidence clusters")).not.toBeInTheDocument();
+
+  const branchToggle = screen.getByRole("button", { name: "Collapse Launch plan" });
+  expect(branchToggle).toHaveAttribute("aria-expanded", "true");
+
+  fireEvent.click(branchToggle);
+
+  expect(branchToggle).toHaveAttribute("aria-expanded", "false");
+  expect(within(tree).queryByText("Launch date is confirmed")).not.toBeInTheDocument();
+
+  fireEvent.click(branchToggle);
+
+  expect(branchToggle).toHaveAttribute("aria-expanded", "true");
+  expect(within(tree).getByText("Launch date is confirmed")).toBeInTheDocument();
+});
+
 test("copies the mind map outline to the clipboard", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {

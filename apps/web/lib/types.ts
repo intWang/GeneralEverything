@@ -69,6 +69,21 @@ export type StructuredSummary = {
   risks?: StructuredSummaryItem[];
 };
 
+export type MindMapReference = {
+  end_seconds?: number | null;
+  label?: string | null;
+  segment_id?: string | null;
+  start_seconds?: number | null;
+};
+
+export type MindMapNode = {
+  children?: MindMapNode[];
+  id: string;
+  label: string;
+  references?: MindMapReference[];
+  summary?: string | null;
+};
+
 export type JobRecord = {
   created_at: string;
   description: string | null;
@@ -82,6 +97,7 @@ export type JobRecord = {
   id: string;
   input_mode: InputMode;
   mindmap_node_count?: number | null;
+  mindmap_nodes?: MindMapNode | null;
   mindmap_preview_text?: string | null;
   mindmap_status?: string | null;
   source_name: string | null;

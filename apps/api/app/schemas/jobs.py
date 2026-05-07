@@ -57,6 +57,21 @@ class StructuredSummary(BaseModel):
     citations: list[SummaryCitation] = Field(default_factory=list)
 
 
+class MindMapReference(BaseModel):
+    segment_id: str | None = None
+    start_seconds: float | None = None
+    end_seconds: float | None = None
+    label: str | None = None
+
+
+class MindMapNode(BaseModel):
+    id: str
+    label: str
+    summary: str | None = None
+    children: list["MindMapNode"] = Field(default_factory=list)
+    references: list[MindMapReference] = Field(default_factory=list)
+
+
 class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -95,6 +110,7 @@ class JobResponse(BaseModel):
     summary_key_points_count: int | None
     mindmap_status: str | None
     mindmap_preview_text: str | None
+    mindmap_nodes: MindMapNode | None = None
     mindmap_node_count: int | None
     status: JobStatus
     stage: str

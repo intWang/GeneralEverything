@@ -208,6 +208,10 @@ def _apply_public_video_mindmap_shell(
 ) -> None:
     job.mindmap_status = mindmap_shell.status
     job.mindmap_preview_text = mindmap_shell.preview_text
+    mindmap_nodes_json = getattr(mindmap_shell, "mindmap_nodes_json", None)
+    job.mindmap_nodes_json = (
+        mindmap_nodes_json() if callable(mindmap_nodes_json) else None
+    )
     job.mindmap_node_count = mindmap_shell.node_count
     job.status = JobStatus.RUNNING
     job.stage = mindmap_shell.stage
