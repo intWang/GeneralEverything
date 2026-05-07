@@ -17,6 +17,7 @@ from app.schemas.jobs import (
     JobResponse,
     TranslateJobContentRequest,
     TranslateJobContentResponse,
+    UpdateJobRequest,
 )
 from app.services.connectors.public_video import (
     PublicVideoProbeError,
@@ -49,8 +50,17 @@ def run_analysis_job_in_background(job_id: uuid.UUID, bind) -> None:
 
     def persist_job(updated_job: AnalysisJob) -> None:
         with background_session_factory() as background_session:
-            merged_job = background_session.merge(updated_job)
-            background_session.add(merged_job)
+            existing_job = background_session.get(AnalysisJob, updated_job.id)
+            if existing_job is None:
+                return
+
+            for column in AnalysisJob.__table__.columns:
+                if column.key == "id":
+                    continue
+                if column.key == "title" and existing_job.title:
+                    continue
+                setattr(existing_job, column.key, getattr(updated_job, column.key))
+
             background_session.commit()
 
     asyncio.run(
@@ -71,6 +81,28 @@ def run_analysis_job_in_background(job_id: uuid.UUID, bind) -> None:
 
 def run_public_video_job_in_background(job_id: uuid.UUID, bind) -> None:
     run_analysis_job_in_background(job_id, bind)
+
+
+def _get_job_or_404(session: Session, job_id: uuid.UUID) -> AnalysisJob:
+    job = session.get(AnalysisJob, job_id)
+
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return job
+
+
+def _queue_job_background_task(
+    job: AnalysisJob,
+    background_tasks: BackgroundTasks,
+    bind,
+) -> None:
+    if job.input_mode == InputMode.PUBLIC_VIDEO:
+        background_tasks.add_task(run_public_video_job_in_background, job.id, bind)
+        return
+
+    if job.input_mode == InputMode.RINGCENTRAL_RECORDING:
+        background_tasks.add_task(run_analysis_job_in_background, job.id, bind)
 
 
 @router.post("", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
@@ -145,12 +177,53 @@ def get_job(
     job_id: uuid.UUID,
     session: Session = Depends(get_session),
 ) -> JobResponse:
-    job = session.get(AnalysisJob, job_id)
+    return _get_job_or_404(session, job_id)
 
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+
+@router.patch("/{job_id}", response_model=JobResponse)
+def update_job(
+    job_id: uuid.UUID,
+    payload: UpdateJobRequest,
+    session: Session = Depends(get_session),
+) -> JobResponse:
+    job = _get_job_or_404(session, job_id)
+    job.title = payload.title
+
+    session.add(job)
+    session.commit()
+    session.refresh(job)
 
     return job
+
+
+@router.post("/{job_id}/retry", response_model=JobResponse)
+def retry_job(
+    job_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> JobResponse:
+    job = _get_job_or_404(session, job_id)
+    job.reset_pipeline_for_retry()
+
+    session.add(job)
+    session.commit()
+    session.refresh(job)
+
+    _queue_job_background_task(job, background_tasks, session.get_bind())
+
+    return job
+
+
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_job(
+    job_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> None:
+    job = _get_job_or_404(session, job_id)
+
+    session.delete(job)
+    session.commit()
+    return None
 
 
 @router.post("/{job_id}/questions", response_model=AskJobQuestionResponse)

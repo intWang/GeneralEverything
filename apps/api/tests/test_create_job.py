@@ -1,6 +1,7 @@
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from uuid import UUID
 
 from alembic import command
 from alembic.config import Config
@@ -299,6 +300,582 @@ def test_get_job_returns_404_when_missing(tmp_path) -> None:
     client, _testing_session = make_test_client(tmp_path)
 
     response = client.get("/api/jobs/11111111-1111-1111-1111-111111111111")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Job not found"}
+
+
+def test_rename_job_updates_title(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        response = client.patch(
+            f"/api/jobs/{job_id}",
+            json={"title": "Renamed analysis"},
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Renamed analysis"
+
+    with testing_session() as session:
+        persisted_job = session.query(AnalysisJob).one()
+
+    assert persisted_job.title == "Renamed analysis"
+
+
+def test_rename_job_trims_title(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        response = client.patch(
+            f"/api/jobs/{job_id}",
+            json={"title": "  Renamed analysis  "},
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "Renamed analysis"
+
+    with testing_session() as session:
+        persisted_job = session.query(AnalysisJob).one()
+
+    assert persisted_job.title == "Renamed analysis"
+
+
+def test_rename_job_rejects_missing_title(tmp_path) -> None:
+    client, _testing_session = make_test_client(tmp_path)
+
+    response = client.patch(
+        "/api/jobs/11111111-1111-1111-1111-111111111111",
+        json={},
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+def test_rename_job_rejects_blank_title(tmp_path) -> None:
+    client, _testing_session = make_test_client(tmp_path)
+
+    response = client.patch(
+        "/api/jobs/11111111-1111-1111-1111-111111111111",
+        json={"title": "   "},
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+
+
+def test_rename_job_returns_404_when_missing(tmp_path) -> None:
+    client, _testing_session = make_test_client(tmp_path)
+
+    response = client.patch(
+        "/api/jobs/11111111-1111-1111-1111-111111111111",
+        json={"title": "Missing"},
+    )
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Job not found"}
+
+
+def test_retry_public_video_job_resumes_after_metadata_and_clears_pipeline_fields(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    started_jobs: list[str] = []
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = (
+        lambda job_id, _bind: started_jobs.append(str(job_id))
+    )
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+        started_jobs.clear()
+
+        with testing_session() as session:
+            persisted_job = session.query(AnalysisJob).one()
+            persisted_job.status = jobs_routes.JobStatus.COMPLETED
+            persisted_job.stage = "mindmap_generated"
+            persisted_job.download_status = "ready"
+            persisted_job.download_executor = "yt-dlp"
+            persisted_job.download_format_id = "best"
+            persisted_job.download_format_label = "best-available"
+            persisted_job.download_artifact_path = "artifacts/downloads/sample.mp4"
+            persisted_job.download_progress_json = '{"status":"finished"}'
+            persisted_job.download_formats_json = '[{"id":"best"}]'
+            persisted_job.diagnostics_json = '[{"reason":"old_failure"}]'
+            persisted_job.transcript_status = "ready"
+            persisted_job.transcript_extractor = "whisper"
+            persisted_job.transcript_audio_artifact_path = "artifacts/audio/sample.wav"
+            persisted_job.detected_language_code = "en"
+            persisted_job.detected_language_name = "English"
+            persisted_job.transcript_preview_text = "Old transcript"
+            persisted_job.transcript_source_text = "Old transcript source"
+            persisted_job.transcript_source_segments_json = '[{"text":"Old"}]'
+            persisted_job.transcript_translations_json = '{"zh":"旧"}'
+            persisted_job.transcript_segment_count = 1
+            persisted_job.summary_status = "ready"
+            persisted_job.summary_preview_text = "Old summary"
+            persisted_job.summary_source_text = "Old summary source"
+            persisted_job.summary_source_bullets_json = '["Old bullet"]'
+            persisted_job.summary_structured_json = '{"abstract":"Old"}'
+            persisted_job.summary_translations_json = '{"zh":"旧摘要"}'
+            persisted_job.summary_key_points_count = 1
+            persisted_job.mindmap_status = "ready"
+            persisted_job.mindmap_preview_text = "Old mind map"
+            persisted_job.mindmap_nodes_json = '{"id":"root","label":"Old","children":[]}'
+            persisted_job.mindmap_node_count = 1
+            session.commit()
+
+        response = client.post(f"/api/jobs/{job_id}/retry")
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        app.dependency_overrides.clear()
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["status"] == "queued"
+    assert body["stage"] == "metadata_ready"
+    assert body["source_url"] == "https://example.com/video"
+    assert body["title"] == "Sample Video"
+    assert body["duration_seconds"] == 120
+    assert body["download_status"] is None
+    assert body["download_executor"] is None
+    assert body["download_format_id"] is None
+    assert body["download_format_label"] is None
+    assert body["download_artifact_path"] is None
+    assert body["download_progress"] is None
+    assert body["download_formats"] is None
+    assert body["diagnostics"] is None
+    assert body["transcript_status"] is None
+    assert body["transcript_extractor"] is None
+    assert body["transcript_audio_artifact_path"] is None
+    assert body["detected_language_code"] is None
+    assert body["detected_language_name"] is None
+    assert body["transcript_preview_text"] is None
+    assert body["transcript_source_text"] is None
+    assert body["transcript_source_segments"] is None
+    assert body["transcript_translations"] is None
+    assert body["transcript_segment_count"] is None
+    assert body["summary_status"] is None
+    assert body["summary_preview_text"] is None
+    assert body["summary_source_text"] is None
+    assert body["summary_source_bullets"] is None
+    assert body["summary_structured"] is None
+    assert body["summary_translations"] is None
+    assert body["summary_key_points_count"] is None
+    assert body["mindmap_status"] is None
+    assert body["mindmap_preview_text"] is None
+    assert body["mindmap_nodes"] is None
+    assert body["mindmap_node_count"] is None
+    assert started_jobs == [job_id]
+
+    with testing_session() as session:
+        persisted_job = session.query(AnalysisJob).one()
+
+    assert persisted_job.status.value == "queued"
+    assert persisted_job.stage == "metadata_ready"
+    assert persisted_job.download_status is None
+    assert persisted_job.transcript_source_text is None
+    assert persisted_job.summary_source_text is None
+    assert persisted_job.mindmap_nodes_json is None
+
+
+def test_retry_public_video_after_rename_does_not_reprobe_or_overwrite_title(
+    tmp_path,
+) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    probe_calls: list[str] = []
+    observed_background_titles: list[str | None] = []
+
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Original metadata title",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        rename_response = client.patch(
+            f"/api/jobs/{job_id}",
+            json={"title": "Renamed analysis"},
+        )
+        assert rename_response.status_code == 200
+
+        def fail_probe(source_url: str) -> VideoMetadata:
+            probe_calls.append(source_url)
+            raise AssertionError("retry with metadata should not probe again")
+
+        def run_retry_background(retry_job_id, bind) -> None:
+            background_session = sessionmaker(
+                bind=bind,
+                autoflush=False,
+                autocommit=False,
+                future=True,
+            )
+            with background_session() as session:
+                retry_job = session.get(AnalysisJob, retry_job_id)
+                if retry_job.stage == "queued":
+                    metadata = jobs_routes.probe_public_video_metadata(
+                        retry_job.source_url
+                    )
+                    retry_job.title = metadata.title
+                    session.add(retry_job)
+                    session.commit()
+                observed_background_titles.append(retry_job.title)
+
+        jobs_routes.probe_public_video_metadata = fail_probe
+        jobs_routes.run_public_video_job_in_background = run_retry_background
+
+        with testing_session() as session:
+            persisted_job = session.query(AnalysisJob).one()
+            persisted_job.status = jobs_routes.JobStatus.COMPLETED
+            persisted_job.stage = "mindmap_generated"
+            persisted_job.download_status = "ready"
+            persisted_job.download_artifact_path = "artifacts/downloads/sample.mp4"
+            persisted_job.transcript_status = "ready"
+            persisted_job.transcript_source_text = "Old transcript source"
+            persisted_job.summary_status = "ready"
+            persisted_job.summary_source_text = "Old summary source"
+            persisted_job.mindmap_status = "ready"
+            persisted_job.mindmap_nodes_json = '{"id":"root","label":"Old","children":[]}'
+            session.commit()
+
+        response = client.post(f"/api/jobs/{job_id}/retry")
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["stage"] == "metadata_ready"
+    assert response.json()["title"] == "Renamed analysis"
+    assert probe_calls == []
+    assert observed_background_titles == ["Renamed analysis"]
+
+    with testing_session() as session:
+        persisted_job = session.query(AnalysisJob).one()
+
+    assert persisted_job.title == "Renamed analysis"
+    assert persisted_job.stage == "metadata_ready"
+
+
+def test_retry_public_video_without_metadata_requeues_for_probe_after_rename(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    started_jobs: list[str] = []
+
+    def raise_probe_error(_source_url: str) -> VideoMetadata:
+        raise jobs_routes.PublicVideoProbeError(
+            reason="unsupported_url",
+            message="ERROR: Unsupported URL",
+        )
+
+    jobs_routes.probe_public_video_metadata = raise_probe_error
+    jobs_routes.run_public_video_job_in_background = (
+        lambda job_id, _bind: started_jobs.append(str(job_id))
+    )
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+        rename_response = client.patch(
+            f"/api/jobs/{job_id}",
+            json={"title": "Manual title before metadata"},
+        )
+        assert rename_response.status_code == 200
+
+        response = client.post(f"/api/jobs/{job_id}/retry")
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
+    assert response.json()["stage"] == "queued"
+    assert response.json()["title"] == "Manual title before metadata"
+    assert started_jobs == [job_id]
+
+    with testing_session() as session:
+        persisted_job = session.query(AnalysisJob).one()
+
+    assert persisted_job.stage == "queued"
+    assert persisted_job.title == "Manual title before metadata"
+
+
+def test_retry_ringcentral_job_uses_ringcentral_runner(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_run_background = jobs_routes.run_analysis_job_in_background
+    started_jobs: list[str] = []
+    jobs_routes.run_analysis_job_in_background = (
+        lambda job_id, _bind: started_jobs.append(str(job_id))
+    )
+
+    try:
+        source_url = (
+            "https://xmrupxmn-rxe-1-v.int.rclabenv.com/recordings/abc?isMeetingId=true"
+        )
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": source_url},
+        )
+        job_id = created.json()["id"]
+        started_jobs.clear()
+
+        with testing_session() as session:
+            persisted_job = session.query(AnalysisJob).one()
+            persisted_job.status = jobs_routes.JobStatus.FAILED
+            persisted_job.stage = "ringcentral_auth_required"
+            persisted_job.diagnostics_json = '[{"reason":"ringcentral_auth_required"}]'
+            session.commit()
+
+        response = client.post(f"/api/jobs/{job_id}/retry")
+    finally:
+        jobs_routes.run_analysis_job_in_background = original_run_background
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
+    assert response.json()["stage"] == "queued"
+    assert response.json()["diagnostics"] is None
+    assert started_jobs == [job_id]
+
+
+def test_retry_job_returns_404_when_missing(tmp_path) -> None:
+    client, _testing_session = make_test_client(tmp_path)
+
+    response = client.post("/api/jobs/11111111-1111-1111-1111-111111111111/retry")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Job not found"}
+
+
+def test_delete_job_removes_persisted_job(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        response = client.delete(f"/api/jobs/{job_id}")
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+    with testing_session() as session:
+        assert session.get(AnalysisJob, UUID(job_id)) is None
+
+
+def test_background_persist_skips_deleted_job_without_resurrecting(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    original_process = jobs_routes.process_analysis_job
+    captured_context = {}
+
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
+
+    async def capture_process_context(ctx, _job_id) -> None:
+        captured_context["persist_job"] = ctx["persist_job"]
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        with testing_session() as session:
+            detached_job = session.get(AnalysisJob, UUID(job_id))
+            session.expunge(detached_job)
+            bind = session.get_bind()
+
+        jobs_routes.process_analysis_job = capture_process_context
+        jobs_routes.run_analysis_job_in_background(UUID(job_id), bind)
+
+        response = client.delete(f"/api/jobs/{job_id}")
+        detached_job.stage = "download_ready"
+        detached_job.status = jobs_routes.JobStatus.RUNNING
+        captured_context["persist_job"](detached_job)
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        jobs_routes.process_analysis_job = original_process
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 204
+
+    with testing_session() as session:
+        assert session.get(AnalysisJob, UUID(job_id)) is None
+
+
+def test_background_persist_does_not_overwrite_existing_renamed_title(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    original_process = jobs_routes.process_analysis_job
+    captured_context = {}
+
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
+
+    async def capture_process_context(ctx, _job_id) -> None:
+        captured_context["persist_job"] = ctx["persist_job"]
+
+    try:
+        created = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video"},
+        )
+        job_id = created.json()["id"]
+
+        with testing_session() as session:
+            detached_job = session.get(AnalysisJob, UUID(job_id))
+            session.expunge(detached_job)
+            bind = session.get_bind()
+
+        jobs_routes.process_analysis_job = capture_process_context
+        jobs_routes.run_analysis_job_in_background(UUID(job_id), bind)
+
+        rename_response = client.patch(
+            f"/api/jobs/{job_id}",
+            json={"title": "User title while running"},
+        )
+        assert rename_response.status_code == 200
+
+        detached_job.title = "Stale background title"
+        detached_job.stage = "download_ready"
+        detached_job.status = jobs_routes.JobStatus.RUNNING
+        captured_context["persist_job"](detached_job)
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        jobs_routes.process_analysis_job = original_process
+        app.dependency_overrides.clear()
+
+    with testing_session() as session:
+        persisted_job = session.get(AnalysisJob, UUID(job_id))
+
+    assert persisted_job.title == "User title while running"
+    assert persisted_job.stage == "download_ready"
+
+
+def test_delete_job_returns_404_when_missing(tmp_path) -> None:
+    client, _testing_session = make_test_client(tmp_path)
+
+    response = client.delete("/api/jobs/11111111-1111-1111-1111-111111111111")
 
     app.dependency_overrides.clear()
 

@@ -291,6 +291,49 @@ class AnalysisJob(Base):
         nullable=False,
     )
 
+    def has_public_video_metadata(self) -> bool:
+        return self.input_mode == InputMode.PUBLIC_VIDEO and any(
+            (
+                self.duration_seconds is not None,
+                self.thumbnail_url,
+                self.source_name,
+                self.description,
+            )
+        )
+
+    def reset_pipeline_for_retry(self) -> None:
+        self.status = JobStatus.QUEUED
+        self.stage = "metadata_ready" if self.has_public_video_metadata() else "queued"
+        self.download_status = None
+        self.download_executor = None
+        self.download_format_id = None
+        self.download_format_label = None
+        self.download_artifact_path = None
+        self.download_progress_json = None
+        self.download_formats_json = None
+        self.diagnostics_json = None
+        self.transcript_status = None
+        self.transcript_extractor = None
+        self.transcript_audio_artifact_path = None
+        self.detected_language_code = None
+        self.detected_language_name = None
+        self.transcript_preview_text = None
+        self.transcript_source_text = None
+        self.transcript_source_segments_json = None
+        self.transcript_translations_json = None
+        self.transcript_segment_count = None
+        self.summary_status = None
+        self.summary_preview_text = None
+        self.summary_source_text = None
+        self.summary_source_bullets_json = None
+        self.summary_structured_json = None
+        self.summary_translations_json = None
+        self.summary_key_points_count = None
+        self.mindmap_status = None
+        self.mindmap_preview_text = None
+        self.mindmap_nodes_json = None
+        self.mindmap_node_count = None
+
     @property
     def transcript_translations(self) -> dict[str, str] | None:
         if not self.transcript_translations_json:

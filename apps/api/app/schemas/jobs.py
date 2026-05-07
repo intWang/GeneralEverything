@@ -1,13 +1,24 @@
 from datetime import datetime
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 from app.models import InputMode, JobStatus
 
 
 class CreateJobRequest(BaseModel):
     source_url: HttpUrl
+
+
+class UpdateJobRequest(BaseModel):
+    title: str = Field(..., min_length=1)
+
+    @field_validator("title", mode="before")
+    @classmethod
+    def strip_title(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        return value
 
 
 class AskJobQuestionRequest(BaseModel):
