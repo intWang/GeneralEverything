@@ -500,6 +500,92 @@
   font-weight: 600;
 }
 
+.previewPlayerCard {
+  position: relative;
+  min-height: 12.5rem;
+  margin-top: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(253, 186, 116, 0.32);
+  border-radius: 1.15rem;
+  background:
+    radial-gradient(circle at 24% 18%, rgba(253, 186, 116, 0.36), transparent 32%),
+    linear-gradient(145deg, #111827 0%, #431407 100%);
+  box-shadow: 0 22px 44px -32px rgba(15, 23, 42, 0.55);
+}
+
+.previewPlayerImage {
+  display: block;
+  width: 100%;
+  min-height: 12.5rem;
+  max-height: 15rem;
+  object-fit: cover;
+  opacity: 0.72;
+  filter: saturate(1.08) contrast(1.02);
+}
+
+.previewPlayerPlaceholder {
+  display: grid;
+  min-height: 12.5rem;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.76);
+  font-weight: 700;
+}
+
+.previewPlayerOverlay {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 1rem;
+  background: linear-gradient(180deg, transparent 0%, rgba(17, 24, 39, 0.88) 42%, rgba(17, 24, 39, 0.96) 100%);
+  color: #ffffff;
+}
+
+.previewPlayerLabel {
+  margin: 0 0 0.35rem;
+  color: #fed7aa;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.previewPlayerTitle {
+  margin: 0;
+  font-size: 1.02rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.previewPlayerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.previewPlayerActions span,
+.previewSourceLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.previewPlayerActions span {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffedd5;
+}
+
+.previewSourceLink {
+  width: fit-content;
+  margin-top: 0.75rem;
+  background: #fff7ed;
+  color: #c2410c;
+  text-decoration: none;
+}
+
 .tabList {
   display: flex;
   flex-wrap: wrap;
@@ -713,6 +799,45 @@
   box-shadow: 0 14px 28px -24px rgba(15, 23, 42, 0.2);
 }
 
+.summaryInsightGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.summaryInsightCard {
+  padding: 0.8rem;
+  border: 1px solid rgba(253, 186, 116, 0.28);
+  border-radius: 0.9rem;
+  background:
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.2), transparent 38%),
+    #ffffff;
+}
+
+.summaryInsightKicker {
+  color: #c2410c;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryInsightMetric {
+  margin: 0.35rem 0 0;
+  color: #111827;
+  font-size: 1.45rem;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.summaryInsightText {
+  margin: 0.1rem 0 0;
+  color: #6b7280;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .summaryCardTitle {
   margin: 0;
   font-size: 0.92rem;
@@ -812,6 +937,65 @@
 
 .transcriptLine + .transcriptLine {
   margin-top: 0.5rem;
+}
+
+.mindMapCanvas {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(253, 186, 116, 0.32);
+  border-radius: 1rem;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(251, 191, 36, 0.18), transparent 30%),
+    radial-gradient(circle at 88% 18%, rgba(251, 146, 60, 0.14), transparent 26%),
+    linear-gradient(180deg, #ffffff 0%, #fffaf3 100%);
+}
+
+.mindMapCore {
+  justify-self: center;
+  min-width: min(100%, 13rem);
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  background: #111827;
+  color: #ffffff;
+  text-align: center;
+  box-shadow: 0 18px 36px -28px rgba(17, 24, 39, 0.55);
+}
+
+.mindMapCoreLabel {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #fed7aa;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mindMapBranchGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.mindMapNode {
+  position: relative;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(253, 186, 116, 0.36);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.92);
+  color: #374151;
+  font-weight: 750;
+}
+
+.mindMapConnector {
+  position: absolute;
+  top: -0.75rem;
+  left: 50%;
+  width: 1px;
+  height: 0.75rem;
+  background: rgba(251, 146, 60, 0.45);
 }
 
 .askAiStatus {
@@ -964,5 +1148,10 @@
   .supportSection,
   .panel {
     padding: 1rem;
+  }
+
+  .summaryInsightGrid,
+  .mindMapBranchGrid {
+    grid-template-columns: 1fr;
   }
 }

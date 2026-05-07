@@ -173,8 +173,27 @@ export function SummaryTab({
               ) : null}
             </div>
           ) : null}
+          <div className={styles.summaryInsightGrid} aria-label="Structured summary">
+            <article className={styles.summaryInsightCard}>
+              <span className={styles.summaryInsightKicker}>Brief</span>
+              <p className={styles.summaryInsightMetric}>
+                {keyPointsCount ?? sourceBullets?.length ?? 0}
+              </p>
+              <p className={styles.summaryInsightText}>tracked points</p>
+            </article>
+            <article className={styles.summaryInsightCard}>
+              <span className={styles.summaryInsightKicker}>Key takeaways</span>
+              <p className={styles.summaryInsightMetric}>{groupedBullets.decisions.length}</p>
+              <p className={styles.summaryInsightText}>decisions and facts</p>
+            </article>
+            <article className={styles.summaryInsightCard}>
+              <span className={styles.summaryInsightKicker}>Action items</span>
+              <p className={styles.summaryInsightMetric}>{groupedBullets.actions.length}</p>
+              <p className={styles.summaryInsightText}>follow-ups detected</p>
+            </article>
+          </div>
           <div className={styles.summaryCard}>
-            <h4 className={styles.summaryCardTitle}>Summary</h4>
+            <h4 className={styles.summaryCardTitle}>Brief</h4>
             <p className={styles.tabSectionBody}>{sourceText}</p>
           </div>
           {hasSourceBullets ? (

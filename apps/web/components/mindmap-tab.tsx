@@ -15,6 +15,14 @@ const DEFAULT_BRANCHES = [
   "Open questions",
 ] as const;
 
+function formatBranchLabel(branch: string) {
+  if (!branch) {
+    return branch;
+  }
+
+  return branch.charAt(0).toUpperCase() + branch.slice(1);
+}
+
 const SHELL_COPY: Record<
   TabShellState,
   {
@@ -57,6 +65,13 @@ export function MindMapTab({
   shellState = "queued",
 }: MindMapTabProps) {
   const copy = SHELL_COPY[shellState];
+  const visualBranches = previewText
+    ? previewText
+        .split(",")
+        .map((branch) => branch.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+    : Array.from(branches);
 
   return (
     <div>
@@ -75,6 +90,20 @@ export function MindMapTab({
           ) : null}
         </ul>
       ) : null}
+      <div aria-label="Mind map preview" className={styles.mindMapCanvas}>
+        <div className={styles.mindMapCore}>
+          <span className={styles.mindMapCoreLabel}>Central idea</span>
+          <strong>{previewText ? "AI analysis" : "Summary backbone"}</strong>
+        </div>
+        <div className={styles.mindMapBranchGrid}>
+          {visualBranches.map((branch, index) => (
+            <div className={styles.mindMapNode} data-node-index={index} key={branch}>
+              <span className={styles.mindMapConnector} aria-hidden="true" />
+              {formatBranchLabel(branch)}
+            </div>
+          ))}
+        </div>
+      </div>
       <ul className={styles.tabHintList}>
         {branches.map((branch) => (
           <li className={styles.tabHintItem} key={branch}>

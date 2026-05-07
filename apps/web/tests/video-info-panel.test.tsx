@@ -16,7 +16,7 @@ test("renders hydrated public video metadata", () => {
     />,
   );
 
-  expect(screen.getByText("Weekly sync recap")).toBeInTheDocument();
+  expect(screen.getAllByText("Weekly sync recap").length).toBeGreaterThan(0);
   expect(screen.getByText("OpenAI Channel")).toBeInTheDocument();
   expect(screen.getByText("Youtube")).toBeInTheDocument();
   expect(screen.getByText("12:34")).toBeInTheDocument();
@@ -27,6 +27,27 @@ test("renders hydrated public video metadata", () => {
     "src",
     "https://example.com/thumb.jpg",
   );
+});
+
+test("renders a preview player card with source actions", () => {
+  render(
+    <VideoInfoPanel
+      durationSeconds={754}
+      inputMode="public_video"
+      sourceName="OpenAI Channel"
+      sourceUrl="https://www.youtube.com/watch?v=abc123"
+      thumbnailUrl="https://example.com/thumb.jpg"
+      title="Weekly sync recap"
+    />,
+  );
+
+  expect(screen.getByText("Preview player")).toBeInTheDocument();
+  expect(screen.getByText("12:34 runtime")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Open source video" })).toHaveAttribute(
+    "href",
+    "https://www.youtube.com/watch?v=abc123",
+  );
+  expect(screen.getByText("Timestamp sync ready")).toBeInTheDocument();
 });
 
 test("falls back to pending copy when metadata is still unavailable", () => {

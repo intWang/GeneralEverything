@@ -103,6 +103,46 @@ test("builds a provisional summary once enough transcript segments have arrived"
   expect(screen.getByText("下周将进行团队培训")).toBeInTheDocument();
 });
 
+test("organizes summary output into brief, takeaways, and action groups", () => {
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="summary_generated"
+      jobStatus="running"
+      summarySourceBullets={[
+        "产品发布时间已确认在下周",
+        "客户成功团队将在周四前完成培训材料准备",
+      ]}
+      summarySourceText="录音确认了产品发布时间，并安排了培训准备。"
+      summaryStatus="ready"
+      transcriptSegmentCount={6}
+    />,
+  );
+
+  expect(screen.getAllByText("Brief").length).toBeGreaterThan(0);
+  expect(screen.getByText("Key takeaways")).toBeInTheDocument();
+  expect(screen.getByText("Action items")).toBeInTheDocument();
+});
+
+test("renders mind map branches as a visual node map", () => {
+  render(
+    <AITabs
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapNodeCount={4}
+      mindmapPreviewText="Product launch, training, customer follow-up"
+      mindmapStatus="ready"
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Mind Map" }));
+
+  expect(screen.getByLabelText("Mind map preview")).toBeInTheDocument();
+  expect(screen.getByText("Central idea")).toBeInTheDocument();
+  expect(screen.getByText("Product launch")).toBeInTheDocument();
+  expect(screen.getByText("Customer follow-up")).toBeInTheDocument();
+});
+
 test("replaces the provisional summary with the finalized backend summary when it arrives", () => {
   const { rerender } = render(
     <AITabs

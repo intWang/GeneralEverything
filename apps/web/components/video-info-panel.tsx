@@ -58,23 +58,36 @@ export function VideoInfoPanel({
 }: VideoInfoPanelProps) {
   const sourceLabel = sourceName || sourceUrl || "Pending analysis";
   const platformLabel = formatPlatformLabel(sourceUrl, inputMode);
+  const formattedDuration = formatDuration(durationSeconds);
 
   return (
     <section aria-label="Video information" className={styles.panel}>
       <h2 className={styles.panelTitle}>Video info</h2>
-      {thumbnailUrl ? (
-        <img
-          alt={title || "Video thumbnail"}
-          src={thumbnailUrl}
-          style={{
-            borderRadius: "1rem",
-            display: "block",
-            marginBottom: "1rem",
-            maxHeight: "12rem",
-            objectFit: "cover",
-            width: "100%",
-          }}
-        />
+      <div className={styles.previewPlayerCard}>
+        {thumbnailUrl ? (
+          <img
+            alt={title || "Video thumbnail"}
+            className={styles.previewPlayerImage}
+            src={thumbnailUrl}
+          />
+        ) : (
+          <div className={styles.previewPlayerPlaceholder}>
+            Preview loads after metadata
+          </div>
+        )}
+        <div className={styles.previewPlayerOverlay}>
+          <p className={styles.previewPlayerLabel}>Preview player</p>
+          <p className={styles.previewPlayerTitle}>Source preview</p>
+          <div className={styles.previewPlayerActions}>
+            <span>{formattedDuration} runtime</span>
+            <span>Timestamp sync ready</span>
+          </div>
+        </div>
+      </div>
+      {sourceUrl ? (
+        <a className={styles.previewSourceLink} href={sourceUrl} rel="noreferrer" target="_blank">
+          Open source video
+        </a>
       ) : null}
       <dl className={styles.infoGrid}>
         {jobId ? (
@@ -97,7 +110,7 @@ export function VideoInfoPanel({
         </div>
         <div>
           <dt className={styles.infoLabel}>Duration</dt>
-          <dd className={styles.infoValue}>{formatDuration(durationSeconds)}</dd>
+          <dd className={styles.infoValue}>{formattedDuration}</dd>
         </div>
         <div>
           <dt className={styles.infoLabel}>Audio language</dt>
