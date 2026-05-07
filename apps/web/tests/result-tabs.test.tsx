@@ -144,6 +144,47 @@ test("organizes summary output into brief, takeaways, and action groups", () => 
   expect(screen.getByText("Action items")).toBeInTheDocument();
 });
 
+test("copies the structured summary to the clipboard", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="summary_generated"
+      jobStatus="running"
+      summarySourceBullets={[
+        "产品发布时间已确认在下周",
+        "客户成功团队将在周四前完成培训材料准备",
+      ]}
+      summarySourceText="录音确认了产品发布时间，并安排了培训准备。"
+      summaryStatus="ready"
+      transcriptSegmentCount={6}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Copy summary" }));
+
+  await waitFor(() => {
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "Brief",
+        "录音确认了产品发布时间，并安排了培训准备。",
+        "",
+        "Decisions",
+        "- 产品发布时间已确认在下周",
+        "",
+        "Actions",
+        "- 客户成功团队将在周四前完成培训材料准备",
+      ].join("\n"),
+    );
+  });
+  expect(screen.getByText("Summary copied")).toBeInTheDocument();
+});
+
 test("renders mind map branches as a visual node map", () => {
   render(
     <AITabs

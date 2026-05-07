@@ -34,6 +34,34 @@ const DEFAULT_ITEMS = [
 const ACTION_PATTERN =
   /(将|將|安排|进行|進行|完成|准备|準備|同步|跟进|跟進|follow-up|next step|will|prepare|complete)/i;
 
+function buildSummaryClipboardText({
+  actions,
+  decisions,
+  other,
+  sourceText,
+}: {
+  actions: string[];
+  decisions: string[];
+  other: string[];
+  sourceText: string;
+}) {
+  const sections = [["Brief", sourceText]];
+
+  if (decisions.length) {
+    sections.push(["Decisions", ...decisions.map((item) => `- ${item}`)]);
+  }
+
+  if (actions.length) {
+    sections.push(["Actions", ...actions.map((item) => `- ${item}`)]);
+  }
+
+  if (!decisions.length && !actions.length && other.length) {
+    sections.push(["Key points", ...other.map((item) => `- ${item}`)]);
+  }
+
+  return sections.map((section) => section.join("\n")).join("\n\n");
+}
+
 const SHELL_COPY: Record<
   TabShellState,
   {
@@ -87,6 +115,7 @@ export function SummaryTab({
   const copy = SHELL_COPY[shellState];
   const [recentBulletItems, setRecentBulletItems] = useState<string[]>([]);
   const [showRecentRefresh, setShowRecentRefresh] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | "idle">("idle");
   const hasSourceText = Boolean(sourceText);
   const hasSourceBullets = Boolean(sourceBullets?.length);
   const groupedBullets = (sourceBullets ?? []).reduce<{
@@ -141,6 +170,27 @@ export function SummaryTab({
     return () => window.clearTimeout(timer);
   }, [isProvisional, provisionalRefreshKey, sourceBullets]);
 
+  async function copySummaryToClipboard() {
+    if (!sourceText || !navigator.clipboard?.writeText) {
+      setCopyStatus("failed");
+      return;
+    }
+
+    const clipboardText = buildSummaryClipboardText({
+      actions: groupedBullets.actions,
+      decisions: groupedBullets.decisions,
+      other: groupedBullets.other,
+      sourceText,
+    });
+
+    try {
+      await navigator.clipboard.writeText(clipboardText);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  }
+
   return (
     <div>
       {hasSourceText ? (
@@ -160,6 +210,23 @@ export function SummaryTab({
           {translationStatusLabel ? (
             <p className={styles.tabSectionBody}>{translationStatusLabel}</p>
           ) : null}
+          <div className={styles.summaryActionRow}>
+            <button
+              className={styles.summaryCopyButton}
+              onClick={() => void copySummaryToClipboard()}
+              type="button"
+            >
+              Copy summary
+            </button>
+            {copyStatus === "copied" ? (
+              <span className={styles.summaryCopyStatus}>Summary copied</span>
+            ) : null}
+            {copyStatus === "failed" ? (
+              <span className={styles.summaryCopyStatus}>
+                Copy unavailable
+              </span>
+            ) : null}
+          </div>
           {provisionalLabel ? (
             <p className={styles.tabSectionBody}>{provisionalLabel}</p>
           ) : null}
