@@ -23,6 +23,13 @@ export type TranslateJobContentResponse = {
   target_language_code: string;
   translated_text: string;
 };
+export type MarkdownReportExportResponse = {
+  content_type: "text/markdown; charset=utf-8";
+  filename: string;
+  generated_at: string;
+  job_id: string;
+  markdown: string;
+};
 
 export class ApiError extends Error {
   detail?: string;
@@ -142,4 +149,10 @@ export function translateJobContent(
       target_language_code: targetLanguageCode,
     }),
   });
+}
+
+export function exportJobMarkdownReport(jobId: string) {
+  return readJson<MarkdownReportExportResponse>(
+    buildApiUrl(`/jobs/${jobId}/exports/markdown`),
+  );
 }

@@ -4,6 +4,7 @@ import { vi } from "vitest";
 
 import { buildAskAiMockReferences } from "./ask-ai-test-helpers";
 import { AITabs } from "../components/ai-tabs";
+import { ReportExportPanel } from "../components/report-export-panel";
 import * as api from "../lib/api";
 
 vi.mock("../lib/api", async () => {
@@ -11,6 +12,7 @@ vi.mock("../lib/api", async () => {
 
   return {
     ...actual,
+    exportJobMarkdownReport: vi.fn(),
     submitJobQuestion: vi.fn(),
     translateJobContent: vi.fn(),
   };
@@ -138,6 +140,91 @@ test("offers the AI analysis bundle as a markdown download", () => {
   );
   expect(downloadLink.getAttribute("href")).toContain(
     encodeURIComponent("第一行字幕\n第二行字幕"),
+  );
+});
+
+test("exports the backend markdown report for the active job", async () => {
+  vi.mocked(api.exportJobMarkdownReport).mockResolvedValue({
+    content_type: "text/markdown; charset=utf-8",
+    filename: "get-analysis-job-123.md",
+    generated_at: "2026-05-08T12:00:00Z",
+    job_id: "job-123",
+    markdown: "# Analysis Report\n\nBackend export content",
+  });
+
+  render(<ReportExportPanel jobId="job-123" />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Export report" }));
+
+  await waitFor(() => {
+    expect(api.exportJobMarkdownReport).toHaveBeenCalledWith("job-123");
+  });
+
+  const downloadLink = await screen.findByRole("link", {
+    name: "Download report .md",
+  });
+
+  expect(downloadLink).toHaveAttribute("download", "get-analysis-job-123.md");
+  expect(downloadLink.getAttribute("href")).toContain("data:text/markdown");
+  expect(downloadLink.getAttribute("href")).toContain(
+    encodeURIComponent("# Analysis Report\n\nBackend export content"),
+  );
+});
+
+test("ignores stale backend report exports after the active job changes", async () => {
+  let resolveFirstExport:
+    | ((value: Awaited<ReturnType<typeof api.exportJobMarkdownReport>>) => void)
+    | undefined;
+  vi.mocked(api.exportJobMarkdownReport).mockImplementation(
+    (jobId) =>
+      new Promise((resolve) => {
+        if (jobId === "job-123") {
+          resolveFirstExport = resolve;
+          return;
+        }
+
+        resolve({
+          content_type: "text/markdown; charset=utf-8",
+          filename: "get-analysis-job-456.md",
+          generated_at: "2026-05-08T12:01:00Z",
+          job_id: "job-456",
+          markdown: "# Analysis Report\n\nFresh export content",
+        });
+      }),
+  );
+
+  const { rerender } = render(<ReportExportPanel jobId="job-123" />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Export report" }));
+  rerender(<ReportExportPanel jobId="job-456" />);
+
+  resolveFirstExport?.({
+    content_type: "text/markdown; charset=utf-8",
+    filename: "get-analysis-job-123.md",
+    generated_at: "2026-05-08T12:00:00Z",
+    job_id: "job-123",
+    markdown: "# Analysis Report\n\nStale export content",
+  });
+
+  await waitFor(() => {
+    expect(
+      screen.queryByRole("link", { name: "Download report .md" }),
+    ).not.toBeInTheDocument();
+  });
+
+  fireEvent.click(screen.getByRole("button", { name: "Export report" }));
+
+  const downloadLink = await screen.findByRole("link", {
+    name: "Download report .md",
+  });
+
+  expect(api.exportJobMarkdownReport).toHaveBeenCalledWith("job-456");
+  expect(downloadLink).toHaveAttribute("download", "get-analysis-job-456.md");
+  expect(downloadLink.getAttribute("href")).toContain(
+    encodeURIComponent("Fresh export content"),
+  );
+  expect(downloadLink.getAttribute("href")).not.toContain(
+    encodeURIComponent("Stale export content"),
   );
 });
 

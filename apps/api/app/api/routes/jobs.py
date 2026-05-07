@@ -27,6 +27,7 @@ from app.services.connectors.ringcentral import sanitize_ringcentral_url
 from app.services.events import job_event_broker
 from app.services.ingestion import detect_source_type
 from app.services.qa_pipeline import QAAnswerNotReadyError, answer_job_question
+from app.services.reports.export import build_markdown_report_export
 from app.tasks import process_analysis_job
 from app.services.translations.service import (
     TranslationUnavailableError,
@@ -178,6 +179,23 @@ def get_job(
     session: Session = Depends(get_session),
 ) -> JobResponse:
     return _get_job_or_404(session, job_id)
+
+
+@router.get("/{job_id}/exports/markdown")
+def export_job_markdown_report(
+    job_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> dict[str, str]:
+    job = _get_job_or_404(session, job_id)
+    export = build_markdown_report_export(job)
+
+    return {
+        "content_type": export.content_type,
+        "filename": export.filename,
+        "generated_at": export.generated_at,
+        "job_id": export.job_id,
+        "markdown": export.markdown,
+    }
 
 
 @router.patch("/{job_id}", response_model=JobResponse)

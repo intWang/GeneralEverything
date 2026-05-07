@@ -9,6 +9,7 @@ import { Hero } from "../components/hero";
 import { HomepageSections } from "../components/homepage-sections";
 import { InputSwitcher } from "../components/input-switcher";
 import { JobHistoryPanel } from "../components/job-history-panel";
+import { ReportExportPanel } from "../components/report-export-panel";
 import { StatusTimeline } from "../components/status-timeline";
 import { VideoInfoPanel } from "../components/video-info-panel";
 import { deleteJob, getJob, listJobs, retryJob, updateJob } from "../lib/api";
@@ -1036,6 +1037,7 @@ export default function HomePage() {
                 {loadError ? (
                   <p className={styles.formFeedback}>{loadError}</p>
                 ) : null}
+                <ReportExportPanel jobId={jobState.id} />
                 <AITabs
                   activeJobId={jobState.id}
                   detectedLanguageName={jobState.detected_language_name}
