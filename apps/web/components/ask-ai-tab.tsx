@@ -84,9 +84,23 @@ const SUGGESTED_QUESTIONS = [
   "What should I review first?",
 ] as const;
 
+function buildAnswerClipboardText(answerShell: SubmitJobQuestionResponse) {
+  const sections = [["Answer", answerShell.answer]];
+
+  if (answerShell.references.length) {
+    sections.push([
+      "References",
+      ...answerShell.references.map((reference) => `- ${reference}`),
+    ]);
+  }
+
+  return sections.map((section) => section.join("\n")).join("\n\n");
+}
+
 export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
   const [question, setQuestion] = useState("");
   const [answerShell, setAnswerShell] = useState<SubmitJobQuestionResponse | null>(null);
+  const [answerCopyStatus, setAnswerCopyStatus] = useState<"copied" | "failed" | "idle">("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const activeRequestIdRef = useRef(0);
@@ -97,6 +111,7 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
   useEffect(() => {
     activeRequestIdRef.current += 1;
     setAnswerShell(null);
+    setAnswerCopyStatus("idle");
     setQuestion("");
     setIsSubmitting(false);
     setSubmitError(null);
@@ -105,6 +120,7 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
   useEffect(() => {
     activeRequestIdRef.current += 1;
     setAnswerShell(null);
+    setAnswerCopyStatus("idle");
     setIsSubmitting(false);
     setSubmitError(null);
   }, [shellState]);
@@ -119,6 +135,7 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
     const nextQuestion = question.trim();
     setSubmitError(null);
     setAnswerShell(null);
+    setAnswerCopyStatus("idle");
     setIsSubmitting(true);
     const requestId = activeRequestIdRef.current + 1;
     activeRequestIdRef.current = requestId;
@@ -159,6 +176,20 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
 
     setSubmitError(null);
     setQuestion(nextQuestion);
+  }
+
+  async function copyAnswerToClipboard() {
+    if (!answerShell || !navigator.clipboard?.writeText) {
+      setAnswerCopyStatus("failed");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(buildAnswerClipboardText(answerShell));
+      setAnswerCopyStatus("copied");
+    } catch {
+      setAnswerCopyStatus("failed");
+    }
   }
 
   return (
@@ -224,6 +255,23 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
         <p className={styles.tabSectionBody}>
           {answerShell ? answerShell.answer : copy.answerBody}
         </p>
+        {answerShell ? (
+          <div className={styles.askAiActionRow}>
+            <button
+              className={styles.askAiCopyButton}
+              onClick={() => void copyAnswerToClipboard()}
+              type="button"
+            >
+              Copy answer
+            </button>
+            {answerCopyStatus === "copied" ? (
+              <span className={styles.askAiCopyStatus}>Answer copied</span>
+            ) : null}
+            {answerCopyStatus === "failed" ? (
+              <span className={styles.askAiCopyStatus}>Copy unavailable</span>
+            ) : null}
+          </div>
+        ) : null}
         {answerShell?.references.length ? (
           <div>
             <h5 className={styles.askAiAnswerTitle}>References</h5>

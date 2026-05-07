@@ -849,6 +849,53 @@ test("submits a grounded Ask AI question and renders the backend answer shell", 
   ).toBeInTheDocument();
 });
 
+test("copies a grounded Ask AI answer with references", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  const answer =
+    'Grounded answer shell for "What should I review next?" based on the transcript, summary, and mind map shells currently available.';
+  const references = buildAskAiMockReferences("222.wav");
+  vi.mocked(api.submitJobQuestion).mockResolvedValue({
+    answer,
+    grounded: true,
+    job_id: "job-123",
+    question: "What should I review next?",
+    references,
+  });
+
+  render(
+    <AITabs
+      activeJobId="job-123"
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapStatus="ready"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.change(screen.getByLabelText("Ask a question"), {
+    target: { value: "What should I review next?" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit question" }));
+
+  await screen.findByText(answer);
+  fireEvent.click(screen.getByRole("button", { name: "Copy answer" }));
+
+  await waitFor(() => {
+    expect(writeText).toHaveBeenCalledWith(
+      ["Answer", answer, "", "References", ...references.map((item) => `- ${item}`)].join(
+        "\n",
+      ),
+    );
+  });
+  expect(screen.getByText("Answer copied")).toBeInTheDocument();
+});
+
 test("shows a submitting state while a grounded Ask AI question is in flight", async () => {
   let resolveQuestion: ((value: api.SubmitJobQuestionResponse) => void) | null = null;
   vi.mocked(api.submitJobQuestion).mockImplementation(
