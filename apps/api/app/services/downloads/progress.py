@@ -22,6 +22,7 @@ class DownloadFormatChoice(BaseModel):
     resolution: str | None = None
     container: str | None = None
     kind: DownloadAssetKind
+    artifact_path: str | None = None
 
 
 class DownloadDiagnostic(BaseModel):

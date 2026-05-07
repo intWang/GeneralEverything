@@ -26,6 +26,7 @@ export type DownloadProgress = {
 };
 
 export type DownloadFormat = {
+  artifact_path?: string | null;
   container?: string | null;
   format_id: string;
   format_label: string;
@@ -92,6 +93,7 @@ export type JobRecord = {
   detected_language_name?: string | null;
   diagnostics?: Diagnostic[] | null;
   download_formats?: DownloadFormat[] | null;
+  download_artifact_path?: string | null;
   download_progress?: DownloadProgress | null;
   download_status?: string | null;
   id: string;

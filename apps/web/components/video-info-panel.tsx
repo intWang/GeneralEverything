@@ -56,8 +56,22 @@ function formatDownloadPercent(downloadProgress?: DownloadProgress | null) {
   return `${downloadProgress.percent}%`;
 }
 
-function getFormatLabel(format: DownloadFormat) {
-  return format.format_label;
+function getFormatDetails(format: DownloadFormat) {
+  return [format.resolution, format.container, format.kind]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function getAssetStatus(downloadProgress?: DownloadProgress | null) {
+  if (
+    downloadProgress?.status === "queued" ||
+    downloadProgress?.status === "probing" ||
+    downloadProgress?.status === "downloading"
+  ) {
+    return "Preparing asset";
+  }
+
+  return "Not generated yet";
 }
 
 export function VideoInfoPanel({
@@ -150,9 +164,37 @@ export function VideoInfoPanel({
         ) : null}
         {hasDownloadFormats ? (
           <div>
-            <dt className={styles.infoLabel}>Download formats</dt>
+            <dt className={styles.infoLabel}>Available asset formats</dt>
             <dd className={styles.infoValue}>
-              {downloadFormats?.map((format) => getFormatLabel(format)).join(", ")}
+              <ul className={styles.historyList}>
+                {downloadFormats?.map((format) => {
+                  const details = getFormatDetails(format);
+
+                  return (
+                    <li key={format.format_id}>
+                      <p className={styles.modeNoticeTitle}>{format.format_label}</p>
+                      {details ? (
+                        <p className={styles.modeNoticeBody}>{details}</p>
+                      ) : null}
+                      {format.artifact_path ? (
+                        <p className={styles.modeNoticeBody}>
+                          <a
+                            className={styles.previewSourceLink}
+                            download
+                            href={format.artifact_path}
+                          >
+                            Download {format.format_label}
+                          </a>
+                        </p>
+                      ) : (
+                        <p className={styles.modeNoticeBody}>
+                          {getAssetStatus(downloadProgress)}
+                        </p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
             </dd>
           </div>
         ) : null}

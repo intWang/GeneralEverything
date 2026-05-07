@@ -95,7 +95,26 @@ def test_plan_public_video_download_shell_returns_structured_plan() -> None:
     assert shell.executor == "yt-dlp"
     assert shell.format_id == "best"
     assert shell.format_label == "Best available"
-    assert shell.artifact_path == "var/downloads/public-video/12345678-1234-5678-1234-567812345678.%(ext)s"
+    assert shell.artifact_path is None
+
+
+def test_plan_public_video_download_shell_exposes_multiple_available_formats() -> None:
+    shell = plan_public_video_download_shell(_make_job())
+
+    available_formats = shell.model_dump()["available_formats"]
+
+    assert len(available_formats) >= 2
+    assert {
+        "format_id": "best",
+        "format_label": "Best available",
+        "resolution": "source",
+        "container": None,
+        "kind": "video",
+        "artifact_path": None,
+    } in available_formats
+    assert any(format_choice["kind"] == "audio" for format_choice in available_formats)
+    assert all(format_choice["artifact_path"] is None for format_choice in available_formats)
+    assert all("%(ext)s" not in str(format_choice["artifact_path"]) for format_choice in available_formats)
 
 
 def test_execute_public_video_download_shell_returns_ready_result(
@@ -125,6 +144,48 @@ def test_execute_public_video_download_shell_returns_ready_result(
     assert result.stage == "download_ready"
     assert result.executor == "yt-dlp"
     assert result.artifact_path == str(tmp_path / "artifact.mp4")
+    available_formats = result.model_dump()["available_formats"]
+    assert [
+        format_choice["artifact_path"] for format_choice in available_formats
+    ].count(str(tmp_path / "artifact.mp4")) == 1
+    assert next(
+        format_choice
+        for format_choice in available_formats
+        if format_choice["format_id"] == "best"
+    )["artifact_path"] == str(tmp_path / "artifact.mp4")
+    assert all(
+        format_choice["artifact_path"] is None
+        for format_choice in available_formats
+        if format_choice["format_id"] != "best"
+    )
+
+
+def test_execute_public_video_download_shell_rejects_empty_stdout_without_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    job = _make_job()
+    planned = plan_public_video_download_shell(job, download_root=tmp_path)
+
+    def fake_run(*_args, **_kwargs) -> CompletedProcess[str]:
+        return CompletedProcess(
+            args=["python", "-m", "yt_dlp"],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+
+    monkeypatch.setattr("app.services.downloads.public_video.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "app.services.downloads.public_video._resolve_yt_dlp_command",
+        lambda: ["python", "-m", "yt_dlp"],
+    )
+
+    with pytest.raises(PublicVideoDownloadError) as exc_info:
+        execute_public_video_download_shell(job, planned=planned, download_root=tmp_path)
+
+    assert exc_info.value.reason == "download_artifact_missing"
+    assert "%(ext)s" not in str(exc_info.value.message)
 
 
 def test_execute_public_video_download_shell_normalizes_missing_tool(
@@ -327,6 +388,55 @@ def test_process_analysis_job_persists_download_shell_result(tmp_path: Path) -> 
     assert ("ready", "download_ready") in persisted_jobs
     assert job.download_status == "ready"
     assert job.download_artifact_path == str(tmp_path / "artifact.mp4")
+
+
+def test_process_analysis_job_persists_download_formats_from_planned_shell(
+    tmp_path: Path,
+) -> None:
+    job = _make_job()
+    planned_download = plan_public_video_download_shell(job, download_root=tmp_path)
+    persisted_formats: list[list[dict] | None] = []
+
+    def publish(_event_name: str, _payload: dict) -> None:
+        return None
+
+    def load_job(requested_job_id: UUID) -> AnalysisJob:
+        assert requested_job_id == job.id
+        return job
+
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_formats.append(
+            json.loads(updated_job.download_formats_json)
+            if updated_job.download_formats_json
+            else None
+        )
+
+    def execute_download(_job: AnalysisJob, planned=None):
+        assert planned is planned_download
+        assert job.download_formats_json is not None
+        return _ready_download_shell(tmp_path)
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": publish,
+                "load_job": load_job,
+                "persist_job": persist_job,
+                "plan_public_video_download_shell": lambda current_job: planned_download,
+                "execute_public_video_download_shell": execute_download,
+                "prepare_public_video_transcript_shell": lambda current_job: _ready_transcript_shell(
+                    tmp_path
+                ),
+                "execute_public_video_transcript_shell": lambda current_job: _ready_transcript_result(),
+            },
+            job.id,
+        )
+    )
+
+    assert persisted_formats[0] is not None
+    assert len(persisted_formats[0]) >= 2
+    assert any(format_choice["kind"] == "audio" for format_choice in persisted_formats[0])
+    assert all(format_choice["artifact_path"] is None for format_choice in persisted_formats[0])
 
 
 def test_process_analysis_job_passes_and_publishes_download_progress_callback(

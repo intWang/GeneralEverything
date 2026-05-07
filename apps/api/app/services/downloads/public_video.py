@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import importlib.util
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+
+from app.services.downloads.progress import DownloadFormatChoice
 
 
 DEFAULT_DOWNLOAD_ROOT = Path("var/downloads/public-video")
@@ -19,8 +21,10 @@ class PublicVideoDownloadShell:
     format_id: str
     format_label: str
     artifact_path: str | None
+    available_formats: list[DownloadFormatChoice] = field(default_factory=list)
+    output_template: str | None = None
 
-    def model_dump(self) -> dict[str, str | None]:
+    def model_dump(self) -> dict[str, object]:
         return {
             "status": self.status,
             "stage": self.stage,
@@ -28,6 +32,9 @@ class PublicVideoDownloadShell:
             "format_id": self.format_id,
             "format_label": self.format_label,
             "artifact_path": self.artifact_path,
+            "available_formats": [
+                format_choice.model_dump() for format_choice in self.available_formats
+            ],
         }
 
 
@@ -52,14 +59,17 @@ def _resolve_yt_dlp_command() -> list[str]:
 def plan_public_video_download_shell(job: object, download_root: Path | None = None) -> PublicVideoDownloadShell:
     root = download_root or DEFAULT_DOWNLOAD_ROOT
     job_id = str(getattr(job, "id", "unknown"))
-    artifact_path = root / f"{job_id}.%(ext)s"
+    output_template = root / f"{job_id}.%(ext)s"
+    available_formats = _default_available_formats()
     return PublicVideoDownloadShell(
         status="queued",
         stage="queued_download",
         executor="yt-dlp",
         format_id="best",
         format_label="Best available",
-        artifact_path=str(artifact_path),
+        artifact_path=None,
+        available_formats=available_formats,
+        output_template=str(output_template),
     )
 
 
@@ -73,7 +83,11 @@ def execute_public_video_download_shell(
     if not source_url:
         raise PublicVideoDownloadError("missing_source_url", "The job does not have a source URL.")
 
-    output_template = shell.artifact_path or str((download_root or DEFAULT_DOWNLOAD_ROOT) / f"{getattr(job, 'id', 'unknown')}.%(ext)s")
+    output_template = (
+        shell.output_template
+        or shell.artifact_path
+        or str((download_root or DEFAULT_DOWNLOAD_ROOT) / f"{getattr(job, 'id', 'unknown')}.%(ext)s")
+    )
     output_path = Path(output_template)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -107,6 +121,16 @@ def execute_public_video_download_shell(
         raise PublicVideoDownloadError("download_failed", message)
 
     final_path = _extract_downloaded_path(result.stdout, output_template)
+    if final_path is None:
+        raise PublicVideoDownloadError(
+            "download_artifact_missing",
+            "yt-dlp completed but did not report or create a downloadable artifact.",
+        )
+    available_formats = _with_selected_artifact_path(
+        shell.available_formats,
+        shell.format_id,
+        final_path,
+    )
     return PublicVideoDownloadShell(
         status="ready",
         stage="download_ready",
@@ -114,9 +138,57 @@ def execute_public_video_download_shell(
         format_id=shell.format_id,
         format_label=shell.format_label,
         artifact_path=final_path,
+        available_formats=available_formats,
+        output_template=output_template,
     )
 
 
-def _extract_downloaded_path(stdout: str, fallback_path: str) -> str:
+def _extract_downloaded_path(stdout: str, output_template: str) -> str | None:
     lines = [line.strip() for line in stdout.splitlines() if line.strip()]
-    return lines[-1] if lines else fallback_path
+    if lines:
+        return lines[-1]
+
+    if "%(ext)s" not in output_template:
+        return output_template
+
+    output_path = Path(output_template)
+    matches = sorted(output_path.parent.glob(output_path.name.replace("%(ext)s", "*")))
+    return str(matches[-1]) if matches else None
+
+
+def _default_available_formats() -> list[DownloadFormatChoice]:
+    return [
+        DownloadFormatChoice(
+            format_id="best",
+            format_label="Best available",
+            resolution="source",
+            container=None,
+            kind="video",
+            artifact_path=None,
+        ),
+        DownloadFormatChoice(
+            format_id="bestaudio/best",
+            format_label="Audio only",
+            resolution="audio",
+            container=None,
+            kind="audio",
+            artifact_path=None,
+        ),
+    ]
+
+
+def _with_selected_artifact_path(
+    available_formats: list[DownloadFormatChoice],
+    selected_format_id: str,
+    artifact_path: str,
+) -> list[DownloadFormatChoice]:
+    updated_formats: list[DownloadFormatChoice] = []
+    for format_choice in available_formats:
+        if format_choice.format_id == selected_format_id:
+            updated_formats.append(
+                format_choice.model_copy(update={"artifact_path": artifact_path})
+            )
+        else:
+            updated_formats.append(format_choice)
+
+    return updated_formats

@@ -54,6 +54,16 @@ def _apply_public_video_download_shell(job, download_shell: PublicVideoDownloadS
     job.download_format_id = download_shell.format_id
     job.download_format_label = download_shell.format_label
     job.download_artifact_path = download_shell.artifact_path
+    available_formats = getattr(download_shell, "available_formats", None)
+    if available_formats is not None:
+        job.download_formats_json = json.dumps(
+            [
+                format_choice.model_dump()
+                if hasattr(format_choice, "model_dump")
+                else dict(format_choice)
+                for format_choice in available_formats
+            ]
+        )
     job.status = JobStatus.RUNNING
     job.stage = download_shell.stage
 
@@ -314,6 +324,7 @@ async def _execute_public_video_download(
     )
 
     planned_download = await _resolve(plan_download_shell(job))
+    _apply_public_video_download_shell(job, planned_download)
     progress_awaitables = []
 
     def on_download_progress(progress_payload: dict) -> None:

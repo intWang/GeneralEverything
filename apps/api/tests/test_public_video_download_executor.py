@@ -51,6 +51,55 @@ def test_execute_public_video_download_shell_returns_ready_result(monkeypatch: p
     assert result.stage == "download_ready"
     assert result.executor == "yt-dlp"
     assert result.artifact_path == str(tmp_path / "artifact.mp4")
+    available_formats = result.model_dump()["available_formats"]
+    assert next(
+        format_choice
+        for format_choice in available_formats
+        if format_choice["format_id"] == "best"
+    )["artifact_path"] == str(tmp_path / "artifact.mp4")
+    assert all(
+        format_choice["artifact_path"] is None
+        for format_choice in available_formats
+        if format_choice["format_id"] != "best"
+    )
+
+
+def test_execute_public_video_download_shell_discovers_artifact_when_stdout_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    job = _make_job()
+    planned = plan_public_video_download_shell(job, download_root=tmp_path)
+    artifact_path = tmp_path / f"{job.id}.mp4"
+    artifact_path.write_text("video", encoding="utf-8")
+
+    def fake_run(*_args, **_kwargs) -> CompletedProcess[str]:
+        return CompletedProcess(args=["yt-dlp"], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("app.services.downloads.public_video.subprocess.run", fake_run)
+
+    result = execute_public_video_download_shell(job, planned=planned, download_root=tmp_path)
+
+    assert result.artifact_path == str(artifact_path)
+    assert "%(ext)s" not in result.artifact_path
+
+
+def test_execute_public_video_download_shell_rejects_missing_artifact_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    job = _make_job()
+    planned = plan_public_video_download_shell(job, download_root=tmp_path)
+
+    def fake_run(*_args, **_kwargs) -> CompletedProcess[str]:
+        return CompletedProcess(args=["yt-dlp"], returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("app.services.downloads.public_video.subprocess.run", fake_run)
+
+    with pytest.raises(PublicVideoDownloadError) as exc_info:
+        execute_public_video_download_shell(job, planned=planned, download_root=tmp_path)
+
+    assert exc_info.value.reason == "download_artifact_missing"
 
 
 def test_execute_public_video_download_shell_normalizes_missing_tool(
