@@ -188,6 +188,7 @@ test("toggles a markdown preview for the AI analysis bundle", () => {
 
   const previewButton = screen.getByRole("button", { name: "Preview bundle" });
   expect(previewButton).toHaveAttribute("aria-controls", "analysis-bundle-preview");
+  expect(previewButton).toHaveAttribute("aria-describedby", "analysis-bundle-contents");
   expect(previewButton).toHaveAttribute("aria-expanded", "false");
 
   fireEvent.click(previewButton);

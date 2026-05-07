@@ -636,6 +636,7 @@ export function AITabs({
           ) : null}
           <button
             aria-controls={ANALYSIS_BUNDLE_PREVIEW_ID}
+            aria-describedby={ANALYSIS_BUNDLE_CONTENTS_ID}
             aria-expanded={analysisPreviewIsOpen}
             className={styles.analysisBundlePreviewButton}
             onClick={() => setAnalysisPreviewIsOpen((isOpen) => !isOpen)}
