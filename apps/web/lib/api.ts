@@ -89,6 +89,38 @@ export function listJobs(limit = 8) {
   return readJson<JobRecord[]>(buildApiUrl(`/jobs?limit=${limit}`));
 }
 
+export function updateJob(jobId: string, title: string) {
+  return readJson<JobRecord>(buildApiUrl(`/jobs/${jobId}`), {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+}
+
+export function retryJob(jobId: string) {
+  return readJson<JobRecord>(buildApiUrl(`/jobs/${jobId}/retry`), {
+    method: "POST",
+  });
+}
+
+export async function deleteJob(jobId: string) {
+  const response = await fetch(buildApiUrl(`/jobs/${jobId}`), {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    let detail: string | undefined;
+    try {
+      const errorBody = (await response.json()) as { detail?: string };
+      detail = errorBody.detail;
+    } catch {
+      detail = undefined;
+    }
+
+    throw new ApiError(`Request failed: ${response.status}`, response.status, detail);
+  }
+}
+
 export function submitJobQuestion(jobId: string, question: string) {
   return readJson<SubmitJobQuestionResponse>(buildApiUrl(`/jobs/${jobId}/questions`), {
     method: "POST",

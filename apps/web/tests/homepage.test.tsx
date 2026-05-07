@@ -5,12 +5,16 @@ import { vi } from "vitest";
 import HomePage from "../app/page";
 import * as api from "../lib/api";
 import * as sse from "../lib/sse";
+import type { JobRecord } from "../lib/types";
 
 vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
+  deleteJob: vi.fn(),
   getJob: vi.fn(),
   listJobs: vi.fn(),
+  retryJob: vi.fn(),
   submitJobQuestion: vi.fn(),
+  updateJob: vi.fn(),
 }));
 
 vi.mock("../lib/sse", () => ({
@@ -33,6 +37,23 @@ afterEach(() => {
     value: originalScrollIntoView,
   });
 });
+
+function makeHistoryJob(overrides: Partial<JobRecord> = {}): JobRecord {
+  return {
+    created_at: "2026-05-04T09:00:00Z",
+    description: null,
+    duration_seconds: null,
+    id: "11111111-1111-1111-1111-111111111111",
+    input_mode: "public_video",
+    source_name: null,
+    source_url: "https://example.com/history",
+    stage: "queued",
+    status: "queued",
+    thumbnail_url: null,
+    title: null,
+    ...overrides,
+  };
+}
 
 test("renders a url-first homepage with lightweight supporting sections", () => {
   render(<HomePage />);
@@ -2542,4 +2563,316 @@ test("makes a history selection active immediately before hydration resolves", a
   expect(
     screen.getByRole("radio", { name: "RingCentral Recording URL" }),
   ).not.toBeChecked();
+});
+
+test("reopens a history job with a fallback snapshot before hydration resolves", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  let resolveHydration:
+    | ((value: Awaited<ReturnType<typeof api.getJob>>) => void)
+    | undefined;
+
+  listJobs.mockResolvedValue([
+    makeHistoryJob({
+      id: "44444444-4444-4444-4444-444444444444",
+      source_url: "https://example.com/history-reopen",
+      title: "History fallback title",
+    }),
+  ]);
+  getJob.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolveHydration = resolve;
+      }),
+  );
+
+  render(<HomePage />);
+
+  fireEvent.click(
+    await screen.findByRole("button", {
+      name: /https:\/\/example.com\/history-reopen/i,
+    }),
+  );
+
+  expect(screen.getByText("History fallback title")).toBeInTheDocument();
+  expect(window.location.search).toBe(
+    "?job=44444444-4444-4444-4444-444444444444",
+  );
+
+  resolveHydration?.(
+    makeHistoryJob({
+      id: "44444444-4444-4444-4444-444444444444",
+      source_url: "https://example.com/history-reopen",
+      stage: "summary_generated",
+      status: "running",
+      title: "Hydrated history title",
+    }),
+  );
+
+  await waitFor(() => {
+    expect(screen.getByText("Hydrated history title")).toBeInTheDocument();
+  });
+});
+
+test("renames the active history job inline and refreshes history", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const updateJob = vi.mocked(api.updateJob);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=55555555-5555-5555-5555-555555555555",
+  );
+  getJob.mockResolvedValue(
+    makeHistoryJob({
+      id: "55555555-5555-5555-5555-555555555555",
+      source_url: "https://example.com/rename-active",
+      title: "Original title",
+    }),
+  );
+  listJobs
+    .mockResolvedValueOnce([
+      makeHistoryJob({
+        id: "55555555-5555-5555-5555-555555555555",
+        source_url: "https://example.com/rename-active",
+        title: "Original title",
+      }),
+    ])
+    .mockResolvedValueOnce([
+      makeHistoryJob({
+        id: "55555555-5555-5555-5555-555555555555",
+        source_url: "https://example.com/rename-active",
+        title: "Renamed active title",
+      }),
+    ]);
+  updateJob.mockResolvedValue(
+    makeHistoryJob({
+      id: "55555555-5555-5555-5555-555555555555",
+      source_url: "https://example.com/rename-active",
+      title: "Renamed active title",
+    }),
+  );
+
+  render(<HomePage />);
+
+  await screen.findByText("Original title");
+  fireEvent.click(screen.getByRole("button", { name: "Rename Original title" }));
+  fireEvent.change(screen.getByLabelText("Rename job"), {
+    target: { value: "Renamed active title" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save job name" }));
+
+  await waitFor(() => {
+    expect(updateJob).toHaveBeenCalledWith(
+      "55555555-5555-5555-5555-555555555555",
+      "Renamed active title",
+    );
+  });
+  expect(screen.getByText("Renamed active title")).toBeInTheDocument();
+  expect(listJobs).toHaveBeenCalledTimes(2);
+});
+
+test("retries the active history job without reopening the row", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const retryJob = vi.mocked(api.retryJob);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=66666666-6666-6666-6666-666666666666",
+  );
+  getJob.mockResolvedValue(
+    makeHistoryJob({
+      id: "66666666-6666-6666-6666-666666666666",
+      source_url: "https://example.com/retry-active",
+      stage: "summary_generated",
+      status: "failed",
+      title: "Retry me",
+    }),
+  );
+  listJobs
+    .mockResolvedValueOnce([
+      makeHistoryJob({
+        id: "66666666-6666-6666-6666-666666666666",
+        source_url: "https://example.com/retry-active",
+        stage: "summary_generated",
+        status: "failed",
+        title: "Retry me",
+      }),
+    ])
+    .mockResolvedValueOnce([
+      makeHistoryJob({
+        id: "66666666-6666-6666-6666-666666666666",
+        source_url: "https://example.com/retry-active",
+        stage: "queued",
+        status: "queued",
+        title: "Retry me",
+      }),
+    ]);
+  retryJob.mockResolvedValue(
+    makeHistoryJob({
+      id: "66666666-6666-6666-6666-666666666666",
+      source_url: "https://example.com/retry-active",
+      stage: "queued",
+      status: "queued",
+      title: "Retry me",
+    }),
+  );
+
+  render(<HomePage />);
+
+  await screen.findByText(
+    "Job 66666666-6666-6666-6666-666666666666 is failed for analysis.",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Retry Retry me" }));
+
+  await waitFor(() => {
+    expect(retryJob).toHaveBeenCalledWith("66666666-6666-6666-6666-666666666666");
+  });
+  expect(getJob).toHaveBeenCalledTimes(1);
+  expect(
+    screen.getByText(
+      "Job 66666666-6666-6666-6666-666666666666 is queued for analysis.",
+    ),
+  ).toBeInTheDocument();
+});
+
+test("ignores stale same-job status events after retry resets the active job", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const retryJob = vi.mocked(api.retryJob);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  const handlers: Array<{
+    onEvent?: (event: { data: unknown; event: string }) => void;
+  }> = [];
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=68686868-6868-6868-6868-686868686868",
+  );
+  getJob.mockResolvedValue(
+    makeHistoryJob({
+      id: "68686868-6868-6868-6868-686868686868",
+      source_url: "https://example.com/retry-stale",
+      stage: "summary_generated",
+      status: "failed",
+      title: "Retry stale",
+    }),
+  );
+  listJobs
+    .mockResolvedValueOnce([
+      makeHistoryJob({
+        id: "68686868-6868-6868-6868-686868686868",
+        source_url: "https://example.com/retry-stale",
+        stage: "summary_generated",
+        status: "failed",
+        title: "Retry stale",
+      }),
+    ])
+    .mockResolvedValueOnce([
+      makeHistoryJob({
+        id: "68686868-6868-6868-6868-686868686868",
+        source_url: "https://example.com/retry-stale",
+        stage: "queued",
+        status: "queued",
+        title: "Retry stale",
+      }),
+    ]);
+  retryJob.mockResolvedValue(
+    makeHistoryJob({
+      id: "68686868-6868-6868-6868-686868686868",
+      source_url: "https://example.com/retry-stale",
+      stage: "queued",
+      status: "queued",
+      title: "Retry stale",
+    }),
+  );
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers.push(nextHandlers);
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await screen.findByText(
+    "Job 68686868-6868-6868-6868-686868686868 is failed for analysis.",
+  );
+  const staleHandlers = handlers[0];
+
+  fireEvent.click(screen.getByRole("button", { name: "Retry Retry stale" }));
+
+  await waitFor(() => {
+    expect(
+      screen.getByText(
+        "Job 68686868-6868-6868-6868-686868686868 is queued for analysis.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  act(() => {
+    staleHandlers.onEvent?.({
+      event: "job.status",
+      data: {
+        job_id: "68686868-6868-6868-6868-686868686868",
+        stage: "summary_generated",
+        status: "failed",
+      },
+    });
+  });
+
+  expect(
+    screen.getByText(
+      "Job 68686868-6868-6868-6868-686868686868 is queued for analysis.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText(
+      "Job 68686868-6868-6868-6868-686868686868 is failed for analysis.",
+    ),
+  ).not.toBeInTheDocument();
+  expect(getJob).toHaveBeenCalledTimes(1);
+});
+
+test("deletes the active history job and clears the active URL", async () => {
+  const deleteJob = vi.mocked(api.deleteJob);
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=77777777-7777-7777-7777-777777777777",
+  );
+  getJob.mockResolvedValue(
+    makeHistoryJob({
+      id: "77777777-7777-7777-7777-777777777777",
+      source_url: "https://example.com/delete-active",
+      title: "Delete me",
+    }),
+  );
+  listJobs
+    .mockResolvedValueOnce([
+      makeHistoryJob({
+        id: "77777777-7777-7777-7777-777777777777",
+        source_url: "https://example.com/delete-active",
+        title: "Delete me",
+      }),
+    ])
+    .mockResolvedValueOnce([]);
+  deleteJob.mockResolvedValue(undefined);
+
+  render(<HomePage />);
+
+  await screen.findByText("Delete me");
+  fireEvent.click(screen.getByRole("button", { name: "Delete Delete me" }));
+
+  await waitFor(() => {
+    expect(deleteJob).toHaveBeenCalledWith("77777777-7777-7777-7777-777777777777");
+  });
+  expect(window.location.search).toBe("");
+  expect(screen.queryByText("Delete me")).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Analysis workspace" })).toBeInTheDocument();
 });

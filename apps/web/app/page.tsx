@@ -8,9 +8,10 @@ import { AnalyzeForm } from "../components/analyze-form";
 import { Hero } from "../components/hero";
 import { HomepageSections } from "../components/homepage-sections";
 import { InputSwitcher } from "../components/input-switcher";
+import { JobHistoryPanel } from "../components/job-history-panel";
 import { StatusTimeline } from "../components/status-timeline";
 import { VideoInfoPanel } from "../components/video-info-panel";
-import { getJob, listJobs } from "../lib/api";
+import { deleteJob, getJob, listJobs, retryJob, updateJob } from "../lib/api";
 import { subscribeToJobEvents } from "../lib/sse";
 import type {
   DownloadProgress,
@@ -389,15 +390,20 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const activeJobIdRef = useRef<string | null>(jobState?.id ?? null);
   const hydrationRequestIdRef = useRef(0);
+  const jobRefreshEpochRef = useRef<Record<string, number>>({});
   const resultsSectionRef = useRef<HTMLElement | null>(null);
+  const [jobRefreshEpoch, setJobRefreshEpoch] = useState(0);
 
   activeJobIdRef.current = jobState?.id ?? null;
 
   async function refreshHistory() {
     try {
-      setJobHistory(await listJobs());
+      const jobs = await listJobs();
+      setJobHistory(jobs);
+      return jobs;
     } catch {
       setJobHistory([]);
+      return [];
     }
   }
 
@@ -414,6 +420,22 @@ export default function HomePage() {
     }
 
     window.history.replaceState({}, "", nextUrl);
+  }
+
+  function clearJobUrl() {
+    window.history.replaceState({}, "", "/");
+  }
+
+  function getJobRefreshEpoch(jobId: string) {
+    return jobRefreshEpochRef.current[jobId] ?? 0;
+  }
+
+  function bumpJobRefreshEpoch(jobId: string) {
+    jobRefreshEpochRef.current = {
+      ...jobRefreshEpochRef.current,
+      [jobId]: getJobRefreshEpoch(jobId) + 1,
+    };
+    setJobRefreshEpoch((currentEpoch) => currentEpoch + 1);
   }
 
   async function hydrateJob(
@@ -516,10 +538,14 @@ export default function HomePage() {
     }
 
     const activeJobId = jobState.id;
+    const activeEpoch = getJobRefreshEpoch(activeJobId);
     const refreshActiveJob = () => {
       void getJob(activeJobId)
         .then((job) => {
-          if (activeJobIdRef.current !== activeJobId) {
+          if (
+            activeJobIdRef.current !== activeJobId ||
+            getJobRefreshEpoch(activeJobId) !== activeEpoch
+          ) {
             return;
           }
 
@@ -528,7 +554,10 @@ export default function HomePage() {
               ? mergeJobSnapshot(currentState, job)
               : currentState,
           );
-          if (activeJobIdRef.current === activeJobId) {
+          if (
+            activeJobIdRef.current === activeJobId &&
+            getJobRefreshEpoch(activeJobId) === activeEpoch
+          ) {
             setInputMode((currentMode) =>
               currentMode === job.input_mode ? currentMode : job.input_mode,
             );
@@ -539,6 +568,10 @@ export default function HomePage() {
 
     return subscribeToJobEvents(jobState.id, {
       onEvent: (event) => {
+        if (getJobRefreshEpoch(activeJobId) !== activeEpoch) {
+          return;
+        }
+
         if (event.event === "qa.ready") {
           refreshActiveJob();
           return;
@@ -823,7 +856,7 @@ export default function HomePage() {
         refreshActiveJob();
       },
     });
-  }, [jobState?.id]);
+  }, [jobState?.id, jobRefreshEpoch]);
 
   useEffect(() => {
     if (!jobState?.id || !["queued", "running"].includes(jobState.status)) {
@@ -831,10 +864,14 @@ export default function HomePage() {
     }
 
     const activeJobId = jobState.id;
+    const activeEpoch = getJobRefreshEpoch(activeJobId);
     const intervalId = window.setInterval(() => {
       void getJob(activeJobId)
         .then((job) => {
-          if (activeJobIdRef.current !== activeJobId) {
+          if (
+            activeJobIdRef.current !== activeJobId ||
+            getJobRefreshEpoch(activeJobId) !== activeEpoch
+          ) {
             return;
           }
 
@@ -850,7 +887,7 @@ export default function HomePage() {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [jobState?.id, jobState?.status]);
+  }, [jobState?.id, jobState?.status, jobRefreshEpoch]);
 
   function handleJobCreated(job: CreateJobResponse) {
     syncJobUrl(job.id, "replace");
@@ -878,41 +915,54 @@ export default function HomePage() {
     });
   }
 
+  async function handleHistoryRename(jobId: string, title: string) {
+    const updatedJob = await updateJob(jobId, title);
+    await refreshHistory();
+
+    if (activeJobIdRef.current === jobId) {
+      setJobState((currentState) =>
+        currentState?.id === jobId ? mergeJobSnapshot(currentState, updatedJob) : currentState,
+      );
+      setInputMode(updatedJob.input_mode);
+    }
+  }
+
+  async function handleHistoryRetry(jobId: string) {
+    const retriedJob = await retryJob(jobId);
+    await refreshHistory();
+
+    if (activeJobIdRef.current === jobId) {
+      hydrationRequestIdRef.current += 1;
+      bumpJobRefreshEpoch(jobId);
+      setJobState((currentState) =>
+        currentState?.id === jobId ? { ...currentState, ...retriedJob } : currentState,
+      );
+      setInputMode(retriedJob.input_mode);
+    }
+  }
+
+  async function handleHistoryDelete(jobId: string) {
+    await deleteJob(jobId);
+    await refreshHistory();
+
+    if (activeJobIdRef.current === jobId) {
+      hydrationRequestIdRef.current += 1;
+      setJobState(null);
+      setIsHydrating(false);
+      setLoadError(null);
+      clearJobUrl();
+    }
+  }
+
   const recentJobsPanel = (
-    <section
-      aria-label="Recent jobs"
-      className={`${styles.panel} ${styles.recentJobsPanel}`}
-    >
-      <h2 className={styles.panelTitle}>Recent jobs</h2>
-      {jobHistory.length > 0 ? (
-        <ul className={styles.historyList}>
-          {jobHistory.map((job) => (
-            <li key={job.id}>
-              <button
-                aria-pressed={jobState?.id === job.id}
-                className={styles.historyButton}
-                onClick={() => handleHistorySelection(job.id)}
-                type="button"
-              >
-                <span>{job.source_url}</span>
-                {job.title ? (
-                  <span className={styles.historyMeta}>
-                    Title: {job.title}
-                  </span>
-                ) : null}
-                <span className={styles.historyMeta}>
-                  {job.status} • {job.stage}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={styles.workspaceDescription}>
-          Completed and in-flight jobs will appear here once created.
-        </p>
-      )}
-    </section>
+    <JobHistoryPanel
+      activeJobId={jobState?.id}
+      jobs={jobHistory}
+      onDelete={handleHistoryDelete}
+      onRename={handleHistoryRename}
+      onRetry={handleHistoryRetry}
+      onSelect={handleHistorySelection}
+    />
   );
 
   return (

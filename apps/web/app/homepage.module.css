@@ -460,6 +460,40 @@
   color: #6b7280;
 }
 
+.historyActions,
+.historyInlineForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.historyActions .secondaryButton,
+.historyInlineForm .primaryButton,
+.historyInlineForm .secondaryButton {
+  min-height: 2.35rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.historyTextInput {
+  min-width: 0;
+  flex: 1 1 12rem;
+  min-height: 2.35rem;
+  padding: 0 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+}
+
+.historyTextInput:focus {
+  outline: 2px solid rgba(251, 146, 60, 0.22);
+  outline-offset: 2px;
+}
+
 .timeline {
   margin: 0.85rem 0 0;
   padding-left: 1rem;
