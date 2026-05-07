@@ -314,6 +314,18 @@ function buildAnalysisBundleText({
   return sections.length ? sections.join("\n\n") : null;
 }
 
+function buildAnalysisBundleDownloadHref(bundleText: string | null): string | null {
+  return bundleText
+    ? `data:text/markdown;charset=utf-8,${encodeURIComponent(bundleText)}`
+    : null;
+}
+
+function buildAnalysisBundleFilename(activeJobId?: string): string {
+  const safeJobId = activeJobId?.replace(/[^a-z0-9_-]/gi, "-").replace(/-+/g, "-");
+
+  return safeJobId ? `get-analysis-${safeJobId}.md` : "get-analysis.md";
+}
+
 export function AITabs({
   activeJobId,
   detectedLanguageName,
@@ -483,6 +495,9 @@ export function AITabs({
     summaryText: summaryDisplayText,
     transcriptText: transcriptDisplayText,
   });
+  const analysisBundleDownloadHref =
+    buildAnalysisBundleDownloadHref(analysisBundleText);
+  const analysisBundleFilename = buildAnalysisBundleFilename(activeJobId);
 
   useEffect(() => {
     setAnalysisCopyStatus("idle");
@@ -556,6 +571,15 @@ export function AITabs({
           >
             Copy analysis bundle
           </button>
+          {analysisBundleDownloadHref ? (
+            <a
+              className={styles.analysisBundleDownloadLink}
+              download={analysisBundleFilename}
+              href={analysisBundleDownloadHref}
+            >
+              Download .md
+            </a>
+          ) : null}
           {analysisCopyStatus === "copied" ? (
             <span className={styles.analysisBundleStatus}>
               Analysis bundle copied

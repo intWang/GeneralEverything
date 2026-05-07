@@ -109,6 +109,36 @@ test("copies the available AI analysis bundle", async () => {
   expect(screen.getByText("Analysis bundle copied")).toBeInTheDocument();
 });
 
+test("offers the AI analysis bundle as a markdown download", () => {
+  render(
+    <AITabs
+      activeJobId="job-123"
+      detectedLanguageName="Chinese"
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapPreviewText="Product launch, training"
+      mindmapStatus="ready"
+      summarySourceBullets={["产品发布时间已确认", "下周将进行团队培训"]}
+      summarySourceText="录音确认了产品发布时间，并安排了团队培训。"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+      transcriptSourceText={"第一行字幕\n第二行字幕"}
+      transcriptStatus="ready"
+    />,
+  );
+
+  const downloadLink = screen.getByRole("link", { name: "Download .md" });
+
+  expect(downloadLink).toHaveAttribute("download", "get-analysis-job-123.md");
+  expect(downloadLink.getAttribute("href")).toContain("data:text/markdown");
+  expect(downloadLink.getAttribute("href")).toContain(
+    encodeURIComponent("## Summary"),
+  );
+  expect(downloadLink.getAttribute("href")).toContain(
+    encodeURIComponent("第一行字幕\n第二行字幕"),
+  );
+});
+
 test("shows a live summary warmup state before the first transcript segments arrive", () => {
   render(
     <AITabs

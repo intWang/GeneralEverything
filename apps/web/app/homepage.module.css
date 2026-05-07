@@ -677,6 +677,25 @@
   transform: translateY(-1px);
 }
 
+.analysisBundleDownloadLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid rgba(234, 88, 12, 0.24);
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 0.84rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.analysisBundleDownloadLink:hover {
+  background: #ffedd5;
+}
+
 .analysisBundleStatus {
   color: #166534;
   font-size: 0.84rem;
