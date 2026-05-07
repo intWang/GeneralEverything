@@ -155,7 +155,10 @@ test("summarizes which sections are included in the AI analysis bundle", () => {
   );
 
   const contents = screen.getByLabelText("AI analysis bundle contents");
+  const copyButton = screen.getByRole("button", { name: "Copy analysis bundle" });
 
+  expect(copyButton).toHaveAttribute("aria-describedby", "analysis-bundle-contents");
+  expect(contents).toHaveAttribute("id", "analysis-bundle-contents");
   expect(contents).toHaveTextContent("Bundle includes");
   expect(within(contents).getByText("Summary")).toBeInTheDocument();
   expect(within(contents).getByText("Transcript")).toBeInTheDocument();

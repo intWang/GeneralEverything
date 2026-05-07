@@ -13,6 +13,7 @@ import type { JobRecord, JobStatus } from "../lib/types";
 import type { TabShellState } from "./summary-tab";
 
 const DEFAULT_TABS = ["Summary", "Transcript", "Mind Map", "Ask AI"] as const;
+const ANALYSIS_BUNDLE_CONTENTS_ID = "analysis-bundle-contents";
 const ANALYSIS_BUNDLE_PREVIEW_ID = "analysis-bundle-preview";
 const LANGUAGE_NAME_BY_CODE = Object.fromEntries(
   SUPPORTED_TRANSLATION_LANGUAGES.map((language) => [language.code, language.name]),
@@ -599,6 +600,7 @@ export function AITabs({
       {analysisBundleText ? (
         <div className={styles.analysisBundleRow}>
           <button
+            aria-describedby={ANALYSIS_BUNDLE_CONTENTS_ID}
             className={styles.analysisBundleButton}
             onClick={() => void copyAnalysisBundleToClipboard()}
             type="button"
@@ -608,6 +610,7 @@ export function AITabs({
           <div
             aria-label="AI analysis bundle contents"
             className={styles.analysisBundleContents}
+            id={ANALYSIS_BUNDLE_CONTENTS_ID}
           >
             <span className={styles.analysisBundleContentsLabel}>
               Bundle includes
