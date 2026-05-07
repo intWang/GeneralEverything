@@ -14,9 +14,10 @@ class PublicVideoSummaryShell:
     source_bullets: list[str] | None
     preview_text: str | None
     key_points_count: int | None
+    summary_structured: dict | None = None
 
-    def model_dump(self) -> dict[str, str | int | None]:
-        return {
+    def model_dump(self) -> dict[str, str | int | list[str] | dict | None]:
+        payload: dict[str, str | int | list[str] | dict | None] = {
             "status": self.status,
             "stage": self.stage,
             "source_text": self.source_text,
@@ -25,11 +26,22 @@ class PublicVideoSummaryShell:
             "key_points_count": self.key_points_count,
         }
 
+        if self.summary_structured is not None:
+            payload["summary_structured"] = self.summary_structured
+
+        return payload
+
     def source_bullets_json(self) -> str | None:
         if self.source_bullets is None:
             return None
 
         return json.dumps(self.source_bullets, ensure_ascii=False)
+
+    def summary_structured_json(self) -> str | None:
+        if self.summary_structured is None:
+            return None
+
+        return json.dumps(self.summary_structured, ensure_ascii=False)
 
 
 class PublicVideoSummaryShellError(RuntimeError):
@@ -46,6 +58,10 @@ _SALUTATION_PATTERN = re.compile(
 _LEADING_FILLER_PATTERN = re.compile(
     r"^(今天|今日|本次(?:录音|錄音|会议|會議)?(?:中)?|在今天的会议中|在今天的會議中|"
     r"在本次(?:会议|會議|录音|錄音)中|随后|之後|之后|最後|最后|另外|此外|并且|並且|并|並)\s*"
+)
+ACTION_PATTERN = re.compile(
+    r"(将|將|安排|进行|進行|完成|准备|準備|同步|跟进|跟進|follow-up|next step|will|prepare|complete)",
+    flags=re.IGNORECASE,
 )
 _TOPIC_HINTS = (
     (
@@ -240,6 +256,79 @@ def _build_partial_summary_text(summary_points: list[str]) -> str | None:
     return f"Current takeaways include: {'; '.join(visible_points)}."
 
 
+def _format_timestamp(total_seconds: float | int | None) -> str | None:
+    if not isinstance(total_seconds, int | float):
+        return None
+
+    safe_seconds = max(0, int(total_seconds))
+    minutes, seconds = divmod(safe_seconds, 60)
+    return f"{minutes:02d}:{seconds:02d}"
+
+
+def _build_summary_citations(job: object, count: int) -> list[dict]:
+    source_segments = getattr(job, "transcript_source_segments", None)
+    if not isinstance(source_segments, list):
+        return []
+
+    citations: list[dict] = []
+    for index, segment in enumerate(source_segments[:count], start=1):
+        if not isinstance(segment, dict):
+            continue
+
+        citation_id = f"citation-{index}"
+        start_seconds = segment.get("start_seconds")
+        end_seconds = segment.get("end_seconds")
+        citations.append(
+            {
+                "id": citation_id,
+                "segment_id": segment.get("id") if isinstance(segment.get("id"), str) else None,
+                "start_seconds": start_seconds,
+                "end_seconds": end_seconds,
+                "label": _format_timestamp(start_seconds),
+            }
+        )
+
+    return citations
+
+
+def _summary_items_with_citations(
+    summary_points: list[str],
+    citations: list[dict],
+) -> list[dict]:
+    return [
+        {
+            "text": point,
+            "citation_ids": [citations[index]["id"]] if index < len(citations) else [],
+        }
+        for index, point in enumerate(summary_points)
+    ]
+
+
+def _build_structured_summary(
+    job: object,
+    *,
+    abstract: str | None,
+    summary_points: list[str],
+) -> dict:
+    citations = _build_summary_citations(job, len(summary_points))
+    key_points = _summary_items_with_citations(summary_points, citations)
+    action_items = [
+        item for item in key_points if ACTION_PATTERN.search(item["text"])
+    ]
+    decisions = [
+        item for item in key_points if item not in action_items
+    ]
+
+    return {
+        "abstract": abstract,
+        "key_points": key_points,
+        "action_items": action_items,
+        "decisions": decisions,
+        "risks": [],
+        "citations": citations,
+    }
+
+
 def generate_public_video_summary_shell(
     job: object,
     summarizer: Callable[[str], PublicVideoSummaryShell] | None = None,
@@ -271,6 +360,11 @@ def generate_public_video_summary_shell(
         polished_summary_points = polished_summary_points[:2]
     else:
         summary_text = _build_summary_text(summary_points)
+    summary_structured = _build_structured_summary(
+        job,
+        abstract=summary_text,
+        summary_points=polished_summary_points,
+    )
 
     return PublicVideoSummaryShell(
         status="ready",
@@ -279,4 +373,5 @@ def generate_public_video_summary_shell(
         source_bullets=polished_summary_points or None,
         preview_text=summary_text,
         key_points_count=len(polished_summary_points) or None,
+        summary_structured=summary_structured,
     )

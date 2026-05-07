@@ -47,6 +47,28 @@ export type TranscriptSegment = {
   text: string;
 };
 
+export type SummaryCitation = {
+  end_seconds?: number | null;
+  id: string;
+  label?: string | null;
+  segment_id?: string | null;
+  start_seconds?: number | null;
+};
+
+export type StructuredSummaryItem = {
+  citation_ids?: string[];
+  text: string;
+};
+
+export type StructuredSummary = {
+  abstract?: string | null;
+  action_items?: StructuredSummaryItem[];
+  citations?: SummaryCitation[];
+  decisions?: StructuredSummaryItem[];
+  key_points?: StructuredSummaryItem[];
+  risks?: StructuredSummaryItem[];
+};
+
 export type JobRecord = {
   created_at: string;
   description: string | null;
@@ -70,6 +92,7 @@ export type JobRecord = {
   summary_preview_text?: string | null;
   summary_source_bullets?: string[] | null;
   summary_source_text?: string | null;
+  summary_structured?: StructuredSummary | null;
   summary_translations?: Record<string, string> | null;
   summary_status?: string | null;
   transcript_audio_artifact_path?: string | null;

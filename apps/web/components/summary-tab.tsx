@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 
 import styles from "../app/homepage.module.css";
+import type { StructuredSummary, StructuredSummaryItem } from "../lib/types";
 
 export type TabShellState =
   | "queued"
@@ -22,6 +23,7 @@ type SummaryTabProps = {
   provisionalRefreshKey?: number | string | null;
   sourceBullets?: readonly string[] | null;
   sourceText?: string | null;
+  structuredSummary?: StructuredSummary | null;
   translationStatusLabel?: string | null;
 };
 
@@ -60,6 +62,57 @@ function buildSummaryClipboardText({
   }
 
   return sections.map((section) => section.join("\n")).join("\n\n");
+}
+
+function formatTimestamp(totalSeconds?: number | null) {
+  if (typeof totalSeconds !== "number") {
+    return null;
+  }
+
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes.toString().padStart(2, "0")}:${seconds
+    .toString()
+    .padStart(2, "0")}`;
+}
+
+function getCitationLabel(
+  citationId: string,
+  structuredSummary?: StructuredSummary | null,
+) {
+  const citation = structuredSummary?.citations?.find((item) => item.id === citationId);
+
+  return citation?.label ?? formatTimestamp(citation?.start_seconds) ?? citationId;
+}
+
+function SummaryItemWithCitations({
+  item,
+  structuredSummary,
+}: {
+  item: StructuredSummaryItem;
+  structuredSummary?: StructuredSummary | null;
+}) {
+  const citationIds = item.citation_ids ?? [];
+
+  return (
+    <>
+      <span>{item.text}</span>
+      {citationIds.length ? (
+        <span className={styles.summaryRefreshRow}>
+          {citationIds.map((citationId) => (
+            <span
+              aria-label={`Citation ${getCitationLabel(citationId, structuredSummary)}`}
+              className={styles.summaryRefreshBadge}
+              key={citationId}
+            >
+              {getCitationLabel(citationId, structuredSummary)}
+            </span>
+          ))}
+        </span>
+      ) : null}
+    </>
+  );
 }
 
 const SHELL_COPY: Record<
@@ -110,14 +163,31 @@ export function SummaryTab({
   provisionalRefreshKey,
   sourceBullets,
   sourceText,
+  structuredSummary,
   translationStatusLabel,
 }: SummaryTabProps) {
   const copy = SHELL_COPY[shellState];
   const [recentBulletItems, setRecentBulletItems] = useState<string[]>([]);
   const [showRecentRefresh, setShowRecentRefresh] = useState(false);
   const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | "idle">("idle");
-  const hasSourceText = Boolean(sourceText);
+  const effectiveSourceText = sourceText ?? structuredSummary?.abstract;
+  const hasStructuredSummary = Boolean(
+    structuredSummary &&
+      (structuredSummary.abstract ||
+        structuredSummary.action_items?.length ||
+        structuredSummary.decisions?.length ||
+        structuredSummary.key_points?.length ||
+        structuredSummary.risks?.length),
+  );
+  const hasSourceText = Boolean(effectiveSourceText);
   const hasSourceBullets = Boolean(sourceBullets?.length);
+  const structuredActionItems = structuredSummary?.action_items ?? [];
+  const structuredDecisions = structuredSummary?.decisions ?? [];
+  const structuredRisks = structuredSummary?.risks ?? [];
+  const structuredKeyPoints = structuredSummary?.key_points ?? [];
+  const trackedPointCount =
+    keyPointsCount ??
+    (hasStructuredSummary ? structuredKeyPoints.length : sourceBullets?.length ?? 0);
   const groupedBullets = (sourceBullets ?? []).reduce<{
     actions: string[];
     decisions: string[];
@@ -171,16 +241,22 @@ export function SummaryTab({
   }, [isProvisional, provisionalRefreshKey, sourceBullets]);
 
   async function copySummaryToClipboard() {
-    if (!sourceText || !navigator.clipboard?.writeText) {
+    if (!effectiveSourceText || !navigator.clipboard?.writeText) {
       setCopyStatus("failed");
       return;
     }
 
     const clipboardText = buildSummaryClipboardText({
-      actions: groupedBullets.actions,
-      decisions: groupedBullets.decisions,
-      other: groupedBullets.other,
-      sourceText,
+      actions: hasStructuredSummary
+        ? structuredActionItems.map((item) => item.text)
+        : groupedBullets.actions,
+      decisions: hasStructuredSummary
+        ? structuredDecisions.map((item) => item.text)
+        : groupedBullets.decisions,
+      other: hasStructuredSummary
+        ? structuredKeyPoints.map((item) => item.text)
+        : groupedBullets.other,
+      sourceText: effectiveSourceText,
     });
 
     try {
@@ -243,27 +319,95 @@ export function SummaryTab({
           <div className={styles.summaryInsightGrid} aria-label="Structured summary">
             <article className={styles.summaryInsightCard}>
               <span className={styles.summaryInsightKicker}>Brief</span>
-              <p className={styles.summaryInsightMetric}>
-                {keyPointsCount ?? sourceBullets?.length ?? 0}
-              </p>
+              <p className={styles.summaryInsightMetric}>{trackedPointCount}</p>
               <p className={styles.summaryInsightText}>tracked points</p>
             </article>
             <article className={styles.summaryInsightCard}>
               <span className={styles.summaryInsightKicker}>Key takeaways</span>
-              <p className={styles.summaryInsightMetric}>{groupedBullets.decisions.length}</p>
+              <p className={styles.summaryInsightMetric}>
+                {hasStructuredSummary ? structuredDecisions.length : groupedBullets.decisions.length}
+              </p>
               <p className={styles.summaryInsightText}>decisions and facts</p>
             </article>
             <article className={styles.summaryInsightCard}>
               <span className={styles.summaryInsightKicker}>Action items</span>
-              <p className={styles.summaryInsightMetric}>{groupedBullets.actions.length}</p>
+              <p className={styles.summaryInsightMetric}>
+                {hasStructuredSummary ? structuredActionItems.length : groupedBullets.actions.length}
+              </p>
               <p className={styles.summaryInsightText}>follow-ups detected</p>
             </article>
           </div>
           <div className={styles.summaryCard}>
             <h4 className={styles.summaryCardTitle}>Brief</h4>
-            <p className={styles.tabSectionBody}>{sourceText}</p>
+            <p className={styles.tabSectionBody}>{effectiveSourceText}</p>
           </div>
-          {hasSourceBullets ? (
+          {hasStructuredSummary ? (
+            <div className={styles.summaryCard}>
+              {structuredDecisions.length ? (
+                <div className={styles.summaryGroup}>
+                  <h4 className={styles.summaryCardTitle}>Decisions</h4>
+                  <ul className={styles.tabHintList}>
+                    {structuredDecisions.map((item) => (
+                      <li className={styles.tabHintItem} key={item.text}>
+                        <SummaryItemWithCitations
+                          item={item}
+                          structuredSummary={structuredSummary}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {structuredActionItems.length ? (
+                <div className={styles.summaryGroup}>
+                  <h4 className={styles.summaryCardTitle}>Action items</h4>
+                  <ul className={styles.tabHintList}>
+                    {structuredActionItems.map((item) => (
+                      <li className={styles.tabHintItem} key={item.text}>
+                        <SummaryItemWithCitations
+                          item={item}
+                          structuredSummary={structuredSummary}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {structuredRisks.length ? (
+                <div className={styles.summaryGroup}>
+                  <h4 className={styles.summaryCardTitle}>Risks</h4>
+                  <ul className={styles.tabHintList}>
+                    {structuredRisks.map((item) => (
+                      <li className={styles.tabHintItem} key={item.text}>
+                        <SummaryItemWithCitations
+                          item={item}
+                          structuredSummary={structuredSummary}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {!structuredDecisions.length &&
+              !structuredActionItems.length &&
+              !structuredRisks.length &&
+              structuredKeyPoints.length ? (
+                <div className={styles.summaryGroup}>
+                  <h4 className={styles.summaryCardTitle}>Key points</h4>
+                  <ul className={styles.tabHintList}>
+                    {structuredKeyPoints.map((item) => (
+                      <li className={styles.tabHintItem} key={item.text}>
+                        <SummaryItemWithCitations
+                          item={item}
+                          structuredSummary={structuredSummary}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : hasSourceBullets ? (
             <div className={styles.summaryCard}>
               {groupedBullets.decisions.length ? (
                 <div className={styles.summaryGroup}>

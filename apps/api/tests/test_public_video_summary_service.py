@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from uuid import UUID
+import json
 
 import pytest
 
@@ -48,6 +49,84 @@ def test_generate_public_video_summary_shell_returns_generated_result() -> None:
         "客户成功团队将在周四前完成培训材料准备",
         "销售团队将在发布前同步客户名单",
     ]
+
+
+def test_generate_public_video_summary_shell_exposes_layered_summary_with_citations() -> None:
+    job = _make_job()
+    job.transcript_source_text = (
+        "产品会在下周发布。"
+        "客户成功团队将在周四前完成培训材料准备。"
+    )
+    job.transcript_source_segments_json = json.dumps(
+        [
+            {
+                "id": "segment-1",
+                "start_seconds": 3,
+                "end_seconds": 8,
+                "text": "产品会在下周发布。",
+            },
+            {
+                "id": "segment-2",
+                "start_seconds": 9,
+                "end_seconds": 15,
+                "text": "客户成功团队将在周四前完成培训材料准备。",
+            },
+        ]
+    )
+
+    result = generate_public_video_summary_shell(job)
+
+    assert result.summary_structured == {
+        "abstract": "录音确认了产品发布时间，并安排了培训准备。",
+        "key_points": [
+            {"text": "产品发布时间已确认在下周", "citation_ids": ["citation-1"]},
+            {
+                "text": "客户成功团队将在周四前完成培训材料准备",
+                "citation_ids": ["citation-2"],
+            },
+        ],
+        "action_items": [
+            {
+                "text": "客户成功团队将在周四前完成培训材料准备",
+                "citation_ids": ["citation-2"],
+            },
+        ],
+        "decisions": [
+            {"text": "产品发布时间已确认在下周", "citation_ids": ["citation-1"]},
+        ],
+        "risks": [],
+        "citations": [
+            {
+                "id": "citation-1",
+                "segment_id": "segment-1",
+                "start_seconds": 3.0,
+                "end_seconds": 8.0,
+                "label": "00:03",
+            },
+            {
+                "id": "citation-2",
+                "segment_id": "segment-2",
+                "start_seconds": 9.0,
+                "end_seconds": 15.0,
+                "label": "00:09",
+            },
+        ],
+    }
+    assert json.loads(result.summary_structured_json()) == result.summary_structured
+
+
+def test_analysis_job_summary_structured_returns_none_for_malformed_json() -> None:
+    job = _make_job()
+    job.summary_structured_json = "{not valid json"
+
+    assert job.summary_structured is None
+
+
+def test_analysis_job_summary_structured_returns_none_for_invalid_item_shape() -> None:
+    job = _make_job()
+    job.summary_structured_json = json.dumps({"key_points": ["x"]})
+
+    assert job.summary_structured is None
 
 
 def test_generate_public_video_summary_shell_uses_source_transcript_text() -> None:

@@ -152,6 +152,10 @@ def _apply_public_video_summary_shell(
     job.summary_source_bullets_json = (
         source_bullets_json() if callable(source_bullets_json) else None
     )
+    structured_json = getattr(summary_shell, "summary_structured_json", None)
+    job.summary_structured_json = (
+        structured_json() if callable(structured_json) else None
+    )
     job.summary_key_points_count = getattr(summary_shell, "key_points_count", None)
     job.status = JobStatus.RUNNING
     job.stage = summary_shell.stage
@@ -167,6 +171,10 @@ def _apply_public_video_partial_summary_shell(
     source_bullets_json = getattr(summary_shell, "source_bullets_json", None)
     job.summary_source_bullets_json = (
         source_bullets_json() if callable(source_bullets_json) else None
+    )
+    structured_json = getattr(summary_shell, "summary_structured_json", None)
+    job.summary_structured_json = (
+        structured_json() if callable(structured_json) else None
     )
     job.summary_key_points_count = getattr(summary_shell, "key_points_count", None)
     job.status = JobStatus.RUNNING
@@ -184,6 +192,7 @@ def _build_partial_summary_shell(
         source_bullets=source_bullets,
         preview_text=summary_shell.preview_text,
         key_points_count=len(source_bullets),
+        summary_structured=getattr(summary_shell, "summary_structured", None),
     )
 
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from pydantic import BaseModel, ConfigDict, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 from app.models import InputMode, JobStatus
 
@@ -33,6 +33,28 @@ class TranslateJobContentResponse(BaseModel):
     source_language_code: str
     target_language_code: str
     translated_text: str
+
+
+class SummaryCitation(BaseModel):
+    id: str
+    segment_id: str | None = None
+    start_seconds: float | None = None
+    end_seconds: float | None = None
+    label: str | None = None
+
+
+class SummaryStructuredItem(BaseModel):
+    text: str
+    citation_ids: list[str] = Field(default_factory=list)
+
+
+class StructuredSummary(BaseModel):
+    abstract: str | None = None
+    key_points: list[SummaryStructuredItem] = Field(default_factory=list)
+    action_items: list[SummaryStructuredItem] = Field(default_factory=list)
+    decisions: list[SummaryStructuredItem] = Field(default_factory=list)
+    risks: list[SummaryStructuredItem] = Field(default_factory=list)
+    citations: list[SummaryCitation] = Field(default_factory=list)
 
 
 class JobResponse(BaseModel):
@@ -68,6 +90,7 @@ class JobResponse(BaseModel):
     summary_preview_text: str | None
     summary_source_text: str | None
     summary_source_bullets: list[str] | None = None
+    summary_structured: StructuredSummary | None = None
     summary_translations: dict[str, str] | None = None
     summary_key_points_count: int | None
     mindmap_status: str | None

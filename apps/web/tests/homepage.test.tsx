@@ -658,6 +658,197 @@ test("streams partial summary updates into the summary tab as events arrive", as
   expect(screen.getByText("下周将进行团队培训")).toBeInTheDocument();
 });
 
+test("streams final structured summary shell updates into the summary tab", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=28282828-2828-2828-2828-282828282828",
+  );
+  getJob.mockResolvedValueOnce({
+    created_at: "2026-05-04T16:20:00Z",
+    id: "28282828-2828-2828-2828-282828282828",
+    input_mode: "public_video",
+    source_url: "https://example.com/final-summary",
+    stage: "generating_transcript",
+    status: "running",
+    transcript_segment_count: 2,
+    transcript_status: "processing",
+  });
+  listJobs.mockResolvedValue([
+    {
+      created_at: "2026-05-04T16:20:00Z",
+      id: "28282828-2828-2828-2828-282828282828",
+      input_mode: "public_video",
+      source_url: "https://example.com/final-summary",
+      stage: "generating_transcript",
+      status: "running",
+      transcript_segment_count: 2,
+      transcript_status: "processing",
+    },
+  ]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: "AI output" })).toBeInTheDocument();
+  });
+
+  await act(async () => {
+    handlers?.onEvent?.({
+      event: "summary.shell",
+      data: {
+        job_id: "28282828-2828-2828-2828-282828282828",
+        summary: {
+          key_points_count: 2,
+          preview_text: "最终总结",
+          source_bullets: ["产品发布时间已确认", "客户成功团队将在周四前完成培训材料准备"],
+          source_text: "录音确认了产品发布时间，并安排了培训准备。",
+          summary_structured: {
+            abstract: "录音确认了产品发布时间，并安排了培训准备。",
+            key_points: [
+              { text: "产品发布时间已确认", citation_ids: ["citation-1"] },
+              {
+                text: "客户成功团队将在周四前完成培训材料准备",
+                citation_ids: ["citation-2"],
+              },
+            ],
+            action_items: [
+              {
+                text: "客户成功团队将在周四前完成培训材料准备",
+                citation_ids: ["citation-2"],
+              },
+            ],
+            decisions: [{ text: "产品发布时间已确认", citation_ids: ["citation-1"] }],
+            risks: [],
+            citations: [
+              {
+                id: "citation-1",
+                segment_id: "segment-1",
+                start_seconds: 3,
+                end_seconds: 8,
+                label: "00:03",
+              },
+              {
+                id: "citation-2",
+                segment_id: "segment-2",
+                start_seconds: 9,
+                end_seconds: 15,
+                label: "00:09",
+              },
+            ],
+          },
+          stage: "summary_generated",
+          status: "ready",
+        },
+      },
+    });
+  });
+
+  await waitFor(() => {
+    expect(
+      screen.getByText("录音确认了产品发布时间，并安排了培训准备。"),
+    ).toBeInTheDocument();
+  });
+
+  expect(screen.getByText("Source summary")).toBeInTheDocument();
+  expect(screen.getByText("客户成功团队将在周四前完成培训材料准备")).toBeInTheDocument();
+  expect(screen.getByText("00:03")).toBeInTheDocument();
+});
+
+test("clears stale structured summary when final shell omits structured payload", async () => {
+  const getJob = vi.mocked(api.getJob);
+  const listJobs = vi.mocked(api.listJobs);
+  const subscribeToJobEvents = vi.mocked(sse.subscribeToJobEvents);
+  let handlers:
+    | {
+        onEvent?: (event: { data: unknown; event: string }) => void;
+      }
+    | undefined;
+
+  window.history.replaceState(
+    {},
+    "",
+    "/?job=29292929-2929-2929-2929-292929292929",
+  );
+  getJob.mockResolvedValueOnce({
+    created_at: "2026-05-04T16:20:00Z",
+    id: "29292929-2929-2929-2929-292929292929",
+    input_mode: "public_video",
+    source_url: "https://example.com/stale-summary",
+    stage: "generating_transcript",
+    status: "running",
+    summary_source_text: "Partial summary text.",
+    summary_status: "processing",
+    summary_structured: {
+      abstract: "Partial summary text.",
+      key_points: [{ text: "Stale structured decision", citation_ids: ["citation-1"] }],
+      action_items: [],
+      decisions: [{ text: "Stale structured decision", citation_ids: ["citation-1"] }],
+      risks: [],
+      citations: [
+        {
+          id: "citation-1",
+          segment_id: "segment-1",
+          start_seconds: 3,
+          end_seconds: 8,
+          label: "00:03",
+        },
+      ],
+    },
+    transcript_segment_count: 2,
+    transcript_status: "processing",
+  });
+  listJobs.mockResolvedValue([]);
+  subscribeToJobEvents.mockImplementation((_jobId, nextHandlers = {}) => {
+    handlers = nextHandlers;
+    return () => undefined;
+  });
+
+  render(<HomePage />);
+
+  await waitFor(() => {
+    expect(screen.getByText("Stale structured decision")).toBeInTheDocument();
+  });
+
+  await act(async () => {
+    handlers?.onEvent?.({
+      event: "summary.shell",
+      data: {
+        job_id: "29292929-2929-2929-2929-292929292929",
+        summary: {
+          key_points_count: 1,
+          preview_text: "Final summary",
+          source_bullets: ["Final legacy bullet"],
+          source_text: "Final legacy summary text.",
+          stage: "summary_generated",
+          status: "ready",
+        },
+      },
+    });
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText("Final legacy summary text.")).toBeInTheDocument();
+  });
+
+  expect(screen.getByText("Final legacy bullet")).toBeInTheDocument();
+  expect(screen.queryByText("Stale structured decision")).not.toBeInTheDocument();
+  expect(screen.queryByText("00:03")).not.toBeInTheDocument();
+});
+
 test("streams download progress into the active video info panel only", async () => {
   const getJob = vi.mocked(api.getJob);
   const listJobs = vi.mocked(api.listJobs);

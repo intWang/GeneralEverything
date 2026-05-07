@@ -494,7 +494,7 @@ export default function HomePage() {
           return;
         }
 
-        if (event.event === "summary.partial") {
+        if (event.event === "summary.partial" || event.event === "summary.shell") {
           const payload = event.data;
           if (
             !payload ||
@@ -507,6 +507,7 @@ export default function HomePage() {
           }
 
           const summaryPayload = payload.summary as Record<string, unknown>;
+          const isFinalSummaryShell = event.event === "summary.shell";
           setJobState((currentState) => {
             if (currentState?.id !== activeJobId) {
               return currentState;
@@ -517,7 +518,9 @@ export default function HomePage() {
               stage:
                 typeof summaryPayload.stage === "string"
                   ? (summaryPayload.stage as JobRecord["stage"])
-                  : currentState.stage,
+                  : isFinalSummaryShell
+                    ? "summary_generated"
+                    : currentState.stage,
               status: "running",
               summary_key_points_count:
                 typeof summaryPayload.key_points_count === "number"
@@ -536,10 +539,19 @@ export default function HomePage() {
                 typeof summaryPayload.source_text === "string"
                   ? summaryPayload.source_text
                   : currentState.summary_source_text,
+              summary_structured:
+                summaryPayload.summary_structured &&
+                typeof summaryPayload.summary_structured === "object"
+                  ? (summaryPayload.summary_structured as JobRecord["summary_structured"])
+                  : isFinalSummaryShell
+                    ? null
+                    : currentState.summary_structured,
               summary_status:
                 typeof summaryPayload.status === "string"
                   ? summaryPayload.status
-                  : "processing",
+                  : isFinalSummaryShell
+                    ? "ready"
+                    : "processing",
             });
           });
           return;
@@ -839,6 +851,7 @@ export default function HomePage() {
                   summaryPreviewText={jobState.summary_preview_text}
                   summarySourceBullets={jobState.summary_source_bullets}
                   summarySourceText={jobState.summary_source_text}
+                  summaryStructured={jobState.summary_structured}
                   summaryTranslations={jobState.summary_translations}
                   summaryStatus={jobState.summary_status}
                   transcriptAudioArtifactPath={jobState.transcript_audio_artifact_path}

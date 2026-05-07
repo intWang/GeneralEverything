@@ -299,7 +299,126 @@ test("organizes summary output into brief, takeaways, and action groups", () => 
 
   expect(screen.getAllByText("Brief").length).toBeGreaterThan(0);
   expect(screen.getByText("Key takeaways")).toBeInTheDocument();
-  expect(screen.getByText("Action items")).toBeInTheDocument();
+  expect(screen.getAllByText("Action items").length).toBeGreaterThan(0);
+});
+
+test("renders structured summary sections with timestamp citation chips", () => {
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="summary_generated"
+      jobStatus="running"
+      summaryStatus="ready"
+      summaryStructured={{
+        abstract: "录音确认了产品发布时间，并安排了培训准备。",
+        key_points: [
+          { text: "产品发布时间已确认在下周", citation_ids: ["citation-1"] },
+          {
+            text: "客户成功团队将在周四前完成培训材料准备",
+            citation_ids: ["citation-2"],
+          },
+        ],
+        action_items: [
+          {
+            text: "客户成功团队将在周四前完成培训材料准备",
+            citation_ids: ["citation-2"],
+          },
+        ],
+        decisions: [
+          { text: "产品发布时间已确认在下周", citation_ids: ["citation-1"] },
+        ],
+        risks: [],
+        citations: [
+          {
+            id: "citation-1",
+            segment_id: "segment-1",
+            start_seconds: 3,
+            end_seconds: 8,
+            label: "00:03",
+          },
+          {
+            id: "citation-2",
+            segment_id: "segment-2",
+            start_seconds: 9,
+            end_seconds: 15,
+            label: "00:09",
+          },
+        ],
+      }}
+      transcriptSegmentCount={6}
+    />,
+  );
+
+  expect(screen.getAllByText("Action items").length).toBeGreaterThan(0);
+  expect(screen.getByText("Decisions")).toBeInTheDocument();
+  expect(
+    screen.getByText("客户成功团队将在周四前完成培训材料准备"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("00:03")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "00:03" })).not.toBeInTheDocument();
+});
+
+test("uses legacy bullet count when structured summary is absent", () => {
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="summary_generated"
+      jobStatus="running"
+      summarySourceBullets={["产品发布时间已确认在下周", "客户成功团队将在周四前完成培训材料准备"]}
+      summarySourceText="录音确认了产品发布时间，并安排了培训准备。"
+      summaryStatus="ready"
+      transcriptSegmentCount={6}
+    />,
+  );
+
+  expect(screen.getByLabelText("Structured summary")).toHaveTextContent("2");
+  expect(screen.getByText("tracked points")).toBeInTheDocument();
+});
+
+test("prefers translated or legacy source text over structured summary abstract", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+
+  render(
+    <AITabs
+      detectedLanguageName="Chinese"
+      jobStage="summary_generated"
+      jobStatus="running"
+      summarySourceText="Translated summary should be visible."
+      summaryStatus="ready"
+      summaryStructured={{
+        abstract: "Structured original abstract should stay hidden.",
+        key_points: [{ text: "产品发布时间已确认", citation_ids: [] }],
+        action_items: [],
+        decisions: [{ text: "产品发布时间已确认", citation_ids: [] }],
+        risks: [],
+        citations: [],
+      }}
+      transcriptSegmentCount={6}
+    />,
+  );
+
+  expect(screen.getByText("Translated summary should be visible.")).toBeInTheDocument();
+  expect(
+    screen.queryByText("Structured original abstract should stay hidden."),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Copy summary" }));
+
+  await waitFor(() => {
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "Brief",
+        "Translated summary should be visible.",
+        "",
+        "Decisions",
+        "- 产品发布时间已确认",
+      ].join("\n"),
+    );
+  });
 });
 
 test("copies the structured summary to the clipboard", async () => {

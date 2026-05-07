@@ -35,6 +35,7 @@ type AITabsProps = {
   summaryPreviewText?: JobRecord["summary_preview_text"];
   summarySourceBullets?: JobRecord["summary_source_bullets"];
   summarySourceText?: JobRecord["summary_source_text"];
+  summaryStructured?: JobRecord["summary_structured"];
   summaryTranslations?: JobRecord["summary_translations"];
   summaryStatus?: JobRecord["summary_status"];
   transcriptAudioArtifactPath?: JobRecord["transcript_audio_artifact_path"];
@@ -367,6 +368,7 @@ export function AITabs({
   summaryPreviewText,
   summarySourceBullets,
   summarySourceText,
+  summaryStructured,
   summaryTranslations: initialSummaryTranslations,
   summaryStatus,
   transcriptAudioArtifactPath,
@@ -395,12 +397,17 @@ export function AITabs({
     useState<AnalysisCopyStatus>("idle");
   const [analysisPreviewIsOpen, setAnalysisPreviewIsOpen] = useState(false);
   const shellStates = deriveTabShellStates(jobStatus, jobStage, transcriptSegmentCount);
-  const hasBackendPartialSummary = Boolean(summarySourceText && summaryStatus === "processing");
+  const structuredSummaryText = summaryStructured?.abstract ?? null;
+  const hasFinalSummaryText = Boolean(summarySourceText || structuredSummaryText);
+  const hasBackendPartialSummary = Boolean(
+    (summarySourceText || structuredSummaryText) && summaryStatus === "processing",
+  );
   const provisionalSummary = buildProvisionalSummary(
     summarySourceText ? null : transcriptSourceText,
     transcriptSegmentCount,
   );
-  const effectiveSummarySourceText = summarySourceText ?? provisionalSummary?.sourceText ?? null;
+  const effectiveSummarySourceText =
+    summarySourceText ?? structuredSummaryText ?? provisionalSummary?.sourceText ?? null;
   const effectiveSummarySourceBullets =
     summarySourceBullets ?? provisionalSummary?.sourceBullets ?? null;
   const effectiveSummaryKeyPointsCount =
@@ -410,7 +417,7 @@ export function AITabs({
       ? "failed"
       : hasBackendPartialSummary
         ? "partial"
-      : summarySourceText
+      : hasFinalSummaryText
         ? shellStates.summary
         : provisionalSummary
           ? "partial"
@@ -418,7 +425,7 @@ export function AITabs({
   const hasLiveSummaryActivity =
     effectiveSummaryShellState === "processing" ||
     hasBackendPartialSummary ||
-    Boolean(provisionalSummary && !summarySourceText);
+    Boolean(provisionalSummary && !hasFinalSummaryText);
   const askAiShellState = deriveAskAiShellState(
     jobStatus,
     jobStage,
@@ -739,10 +746,10 @@ export function AITabs({
                 : undefined
             }
             currentLanguageLabel={summaryLanguageLabel}
-            isProvisional={Boolean(hasBackendPartialSummary || (provisionalSummary && !summarySourceText))}
+            isProvisional={Boolean(hasBackendPartialSummary || (provisionalSummary && !hasFinalSummaryText))}
             keyPointsCount={effectiveSummaryKeyPointsCount}
             languageControl={
-              summarySourceText && !hasBackendPartialSummary ? (
+              effectiveSummarySourceText && !hasBackendPartialSummary ? (
                 <label className={styles.infoLabel}>
                   Summary language
                   <select
@@ -767,23 +774,24 @@ export function AITabs({
             provisionalLabel={
               hasBackendPartialSummary
                 ? "This live summary is streaming from the backend and will hand off to the finalized summary when generation completes."
-                : provisionalSummary && !summarySourceText
+                : provisionalSummary && !hasFinalSummaryText
                 ? "This early draft refreshes as transcript coverage grows, then hands off to the finalized summary."
                 : null
             }
             provisionalMetaLabel={
-              (hasBackendPartialSummary || (provisionalSummary && !summarySourceText)) &&
+              (hasBackendPartialSummary || (provisionalSummary && !hasFinalSummaryText)) &&
               transcriptSegmentCount
                 ? `Based on ${transcriptSegmentCount} transcript segments captured so far.`
                 : null
             }
             provisionalRefreshKey={
-              hasBackendPartialSummary || (provisionalSummary && !summarySourceText)
+              hasBackendPartialSummary || (provisionalSummary && !hasFinalSummaryText)
                 ? transcriptSegmentCount ?? null
                 : null
             }
             sourceBullets={effectiveSummarySourceBullets}
             sourceText={summaryDisplayText}
+            structuredSummary={summaryStructured}
             shellState={effectiveSummaryShellState}
             translationStatusLabel={
               summaryLanguage !== "original" && summaryIsTranslating

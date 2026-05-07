@@ -9,6 +9,122 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 
 
+def _normalize_summary_structured_item(item: object) -> dict | None:
+    if not isinstance(item, dict):
+        return None
+
+    text_value = item.get("text")
+    if not isinstance(text_value, str):
+        return None
+
+    citation_ids = item.get("citation_ids", [])
+    if not isinstance(citation_ids, list) or not all(
+        isinstance(citation_id, str) for citation_id in citation_ids
+    ):
+        return None
+
+    return {
+        "text": text_value,
+        "citation_ids": citation_ids,
+    }
+
+
+def _normalize_summary_structured_items(value: object) -> list[dict] | None:
+    if value is None:
+        return []
+
+    if not isinstance(value, list):
+        return None
+
+    normalized_items: list[dict] = []
+    for item in value:
+        normalized_item = _normalize_summary_structured_item(item)
+        if normalized_item is None:
+            return None
+        normalized_items.append(normalized_item)
+
+    return normalized_items
+
+
+def _normalize_summary_citation(citation: object) -> dict | None:
+    if not isinstance(citation, dict):
+        return None
+
+    citation_id = citation.get("id")
+    if not isinstance(citation_id, str):
+        return None
+
+    segment_id = citation.get("segment_id")
+    if segment_id is not None and not isinstance(segment_id, str):
+        return None
+
+    start_seconds = citation.get("start_seconds")
+    if start_seconds is not None and not isinstance(start_seconds, int | float):
+        return None
+
+    end_seconds = citation.get("end_seconds")
+    if end_seconds is not None and not isinstance(end_seconds, int | float):
+        return None
+
+    label = citation.get("label")
+    if label is not None and not isinstance(label, str):
+        return None
+
+    return {
+        "id": citation_id,
+        "segment_id": segment_id,
+        "start_seconds": float(start_seconds) if start_seconds is not None else None,
+        "end_seconds": float(end_seconds) if end_seconds is not None else None,
+        "label": label,
+    }
+
+
+def _normalize_summary_citations(value: object) -> list[dict] | None:
+    if value is None:
+        return []
+
+    if not isinstance(value, list):
+        return None
+
+    normalized_citations: list[dict] = []
+    for citation in value:
+        normalized_citation = _normalize_summary_citation(citation)
+        if normalized_citation is None:
+            return None
+        normalized_citations.append(normalized_citation)
+
+    return normalized_citations
+
+
+def _normalize_summary_structured(value: object) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+
+    abstract = value.get("abstract")
+    if abstract is not None and not isinstance(abstract, str):
+        return None
+
+    key_points = _normalize_summary_structured_items(value.get("key_points"))
+    action_items = _normalize_summary_structured_items(value.get("action_items"))
+    decisions = _normalize_summary_structured_items(value.get("decisions"))
+    risks = _normalize_summary_structured_items(value.get("risks"))
+    citations = _normalize_summary_citations(value.get("citations"))
+    if any(
+        normalized_value is None
+        for normalized_value in (key_points, action_items, decisions, risks, citations)
+    ):
+        return None
+
+    return {
+        "abstract": abstract,
+        "key_points": key_points,
+        "action_items": action_items,
+        "decisions": decisions,
+        "risks": risks,
+        "citations": citations,
+    }
+
+
 class InputMode(str, PyEnum):
     PUBLIC_VIDEO = "public_video"
     RINGCENTRAL_RECORDING = "ringcentral_recording"
@@ -57,6 +173,7 @@ class AnalysisJob(Base):
     summary_preview_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_source_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_source_bullets_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary_structured_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_translations_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary_key_points_count: Mapped[int | None] = mapped_column(nullable=True)
     mindmap_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
@@ -155,7 +272,24 @@ class AnalysisJob(Base):
         if not self.summary_source_bullets_json:
             return None
 
-        return json.loads(self.summary_source_bullets_json)
+        try:
+            source_bullets = json.loads(self.summary_source_bullets_json)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+        return source_bullets if isinstance(source_bullets, list) else None
+
+    @property
+    def summary_structured(self) -> dict | None:
+        if not self.summary_structured_json:
+            return None
+
+        try:
+            structured_summary = json.loads(self.summary_structured_json)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+        return _normalize_summary_structured(structured_summary)
 
     @property
     def summary_translations(self) -> dict[str, str] | None:

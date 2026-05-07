@@ -241,6 +241,13 @@ def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
             persisted_job.detected_language_name = "Chinese"
             persisted_job.transcript_source_text = "大家好，欢迎来到今天的会议。"
             persisted_job.summary_source_text = "会议确定了发布时间。"
+            persisted_job.summary_structured_json = (
+                '{"abstract":"会议确定了发布时间。",'
+                '"key_points":[{"text":"发布时间已确认","citation_ids":["citation-1"]}],'
+                '"action_items":[],"decisions":[{"text":"发布时间已确认","citation_ids":["citation-1"]}],'
+                '"risks":[],"citations":[{"id":"citation-1","segment_id":"segment-1",'
+                '"start_seconds":3,"end_seconds":8,"label":"00:03"}]}'
+            )
             session.commit()
 
         response = client.get(f"/api/jobs/{job_id}")
@@ -266,6 +273,22 @@ def test_get_job_returns_persisted_job_shell(tmp_path) -> None:
     assert body["detected_language_name"] == "Chinese"
     assert body["transcript_source_text"] == "大家好，欢迎来到今天的会议。"
     assert body["summary_source_text"] == "会议确定了发布时间。"
+    assert body["summary_structured"] == {
+        "abstract": "会议确定了发布时间。",
+        "key_points": [{"text": "发布时间已确认", "citation_ids": ["citation-1"]}],
+        "action_items": [],
+        "decisions": [{"text": "发布时间已确认", "citation_ids": ["citation-1"]}],
+        "risks": [],
+        "citations": [
+            {
+                "id": "citation-1",
+                "segment_id": "segment-1",
+                "start_seconds": 3.0,
+                "end_seconds": 8.0,
+                "label": "00:03",
+            }
+        ],
+    }
     assert body["transcript_status"] is None
     assert body["transcript_extractor"] is None
     assert body["transcript_audio_artifact_path"] is None
