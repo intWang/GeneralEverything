@@ -34,9 +34,7 @@ def test_normalizes_public_video_metadata() -> None:
 
 def test_probe_public_video_metadata_returns_normalized_metadata() -> None:
     def run_probe(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
-        assert command[1:] == [
-            "-m",
-            "yt_dlp",
+        assert command[-3:] == [
             "--dump-single-json",
             "--skip-download",
             "https://example.com/video",

@@ -51,6 +51,9 @@ class JobResponse(BaseModel):
     download_format_id: str | None
     download_format_label: str | None
     download_artifact_path: str | None
+    download_progress: dict | None = None
+    download_formats: list[dict] | None = None
+    diagnostics: list[dict] | None = None
     transcript_status: str | None
     transcript_extractor: str | None
     transcript_audio_artifact_path: str | None

@@ -40,6 +40,9 @@ class AnalysisJob(Base):
     download_format_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     download_format_label: Mapped[str | None] = mapped_column(Text, nullable=True)
     download_artifact_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    download_progress_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    download_formats_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diagnostics_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     transcript_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     transcript_extractor: Mapped[str | None] = mapped_column(String(32), nullable=True)
     transcript_audio_artifact_path: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -83,6 +86,27 @@ class AnalysisJob(Base):
             return None
 
         return json.loads(self.transcript_translations_json)
+
+    @property
+    def download_progress(self) -> dict | None:
+        if not self.download_progress_json:
+            return None
+
+        return json.loads(self.download_progress_json)
+
+    @property
+    def download_formats(self) -> list[dict] | None:
+        if not self.download_formats_json:
+            return None
+
+        return json.loads(self.download_formats_json)
+
+    @property
+    def diagnostics(self) -> list[dict] | None:
+        if not self.diagnostics_json:
+            return None
+
+        return json.loads(self.diagnostics_json)
 
     @property
     def summary_source_bullets(self) -> list[str] | None:

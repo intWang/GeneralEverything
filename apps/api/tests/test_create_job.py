@@ -134,6 +134,37 @@ def test_create_job_detects_ringcentral_recording_url(tmp_path) -> None:
     assert persisted_job.input_mode.value == "ringcentral_recording"
 
 
+def test_job_response_exposes_progress_formats_and_diagnostics(tmp_path) -> None:
+    client, _testing_session = make_test_client(tmp_path)
+
+    original_probe = jobs_routes.probe_public_video_metadata
+    original_run_background = jobs_routes.run_public_video_job_in_background
+    jobs_routes.probe_public_video_metadata = lambda _source_url: VideoMetadata(
+        title="Sample Video",
+        duration_seconds=120,
+        thumbnail_url="https://example.com/thumb.jpg",
+        source_name="Example Channel",
+        description="A short description",
+    )
+    jobs_routes.run_public_video_job_in_background = lambda *_args, **_kwargs: None
+
+    try:
+        response = client.post(
+            "/api/jobs",
+            json={"source_url": "https://example.com/video.mp4"},
+        )
+    finally:
+        jobs_routes.probe_public_video_metadata = original_probe
+        jobs_routes.run_public_video_job_in_background = original_run_background
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert "download_progress" in payload
+    assert "download_formats" in payload
+    assert "diagnostics" in payload
+
+
 def test_create_job_returns_failed_shell_when_probe_fails(tmp_path) -> None:
     client, testing_session = make_test_client(tmp_path)
 
