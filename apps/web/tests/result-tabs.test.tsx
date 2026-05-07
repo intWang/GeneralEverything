@@ -397,6 +397,33 @@ test("shows a live segment counter while transcript lines are streaming", () => 
   expect(screen.getByText("Live progress")).toBeInTheDocument();
 });
 
+test("filters transcript lines by search query", () => {
+  render(
+    <AITabs
+      detectedLanguageName="English"
+      jobStage="generating_transcript"
+      jobStatus="running"
+      transcriptSegmentCount={3}
+      transcriptSourceText={
+        "Welcome to the launch review\nTraining starts next Thursday\nCustomer follow-up owners are confirmed"
+      }
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+  fireEvent.change(screen.getByLabelText("Search transcript"), {
+    target: { value: "customer" },
+  });
+
+  expect(screen.getByText("1 matching line")).toBeInTheDocument();
+  expect(screen.getByText("Customer follow-up owners are confirmed")).toHaveAttribute(
+    "data-search-match",
+    "true",
+  );
+  expect(screen.queryByText("Welcome to the launch review")).not.toBeInTheDocument();
+  expect(screen.queryByText("Training starts next Thursday")).not.toBeInTheDocument();
+});
+
 test("auto-scrolls transcript view when new streaming lines arrive", () => {
   const scrollIntoView = vi.fn();
 

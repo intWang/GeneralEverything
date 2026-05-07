@@ -897,6 +897,46 @@
   margin-top: 0.85rem;
 }
 
+.transcriptSearchRow {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.transcriptSearchLabel {
+  display: grid;
+  gap: 0.35rem;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.transcriptSearchInput {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(253, 186, 116, 0.42);
+  border-radius: 0.8rem;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+}
+
+.transcriptSearchInput:focus {
+  outline: 2px solid rgba(251, 146, 60, 0.22);
+  outline-offset: 2px;
+}
+
+.transcriptSearchMeta {
+  width: fit-content;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(251, 191, 36, 0.18);
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
 .transcriptPauseNote {
   margin: 0;
   color: #9a3412;
@@ -933,6 +973,11 @@
 .transcriptLine[data-recent="true"] {
   background: rgba(254, 215, 170, 0.55);
   box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.22);
+}
+
+.transcriptLine[data-search-match="true"] {
+  background: rgba(254, 243, 199, 0.72);
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.22);
 }
 
 .transcriptLine + .transcriptLine {

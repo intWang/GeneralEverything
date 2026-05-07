@@ -81,12 +81,21 @@ export function TranscriptTab({
   const highlightResetTimerRef = useRef<number | null>(null);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
   const [highlightedLineIndexes, setHighlightedLineIndexes] = useState<number[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const segmentStatusLabel = hasSegmentCount
     ? `${segmentCount} transcript segment${segmentCount === 1 ? "" : "s"} captured so far`
     : shellState === "processing"
       ? "Waiting for the first transcript segment"
       : null;
   const transcriptLines = sourceText ? sourceText.split("\n").filter(Boolean) : [];
+  const indexedTranscriptLines = transcriptLines.map((line, index) => ({ index, line }));
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const visibleTranscriptLines = normalizedSearchQuery
+    ? indexedTranscriptLines.filter(({ line }) =>
+        line.toLowerCase().includes(normalizedSearchQuery),
+      )
+    : indexedTranscriptLines;
+  const matchingLineCount = normalizedSearchQuery ? visibleTranscriptLines.length : null;
 
   useEffect(() => {
     if (shellState !== "partial" || !sourceText) {
@@ -200,6 +209,24 @@ export function TranscriptTab({
           {translationStatusLabel ? (
             <p className={styles.tabSectionBody}>{translationStatusLabel}</p>
           ) : null}
+          <div className={styles.transcriptSearchRow}>
+            <label className={styles.transcriptSearchLabel}>
+              Search transcript
+              <input
+                aria-label="Search transcript"
+                className={styles.transcriptSearchInput}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search transcript lines"
+                type="search"
+                value={searchQuery}
+              />
+            </label>
+            {matchingLineCount !== null ? (
+              <span className={styles.transcriptSearchMeta}>
+                {matchingLineCount} matching line{matchingLineCount === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </div>
           {autoScrollPaused ? (
             <div className={styles.transcriptControls}>
               <p className={styles.transcriptPauseNote}>
@@ -219,10 +246,11 @@ export function TranscriptTab({
             onScroll={handleTranscriptScroll}
             ref={transcriptViewportRef}
           >
-            {transcriptLines.map((line, index) => (
+            {visibleTranscriptLines.map(({ index, line }) => (
               <p
                 className={styles.transcriptLine}
                 data-recent={highlightedLineIndexes.includes(index) ? "true" : "false"}
+                data-search-match={normalizedSearchQuery ? "true" : "false"}
                 key={`${index}-${line}`}
               >
                 {line}
