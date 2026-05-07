@@ -1064,6 +1064,65 @@
   margin-top: 0.25rem;
 }
 
+.askAiSuggestions {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(253, 186, 116, 0.34);
+  border-radius: 0.95rem;
+  background:
+    radial-gradient(circle at top left, rgba(251, 191, 36, 0.18), transparent 34%),
+    #fffaf3;
+}
+
+.askAiSuggestionLabel {
+  margin: 0;
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.askAiSuggestionList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.askAiSuggestionButton {
+  min-height: 2.25rem;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgba(251, 146, 60, 0.36);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #7c2d12;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 750;
+  box-shadow: 0 12px 24px -22px rgba(154, 52, 18, 0.5);
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.askAiSuggestionButton:hover:not(:disabled),
+.askAiSuggestionButton:focus-visible:not(:disabled) {
+  border-color: rgba(234, 88, 12, 0.62);
+  background: #ffffff;
+  box-shadow: 0 16px 26px -20px rgba(154, 52, 18, 0.72);
+  transform: translateY(-1px);
+}
+
+.askAiSuggestionButton:disabled {
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .askAiLabel {
   font-size: 0.9rem;
   font-weight: 600;

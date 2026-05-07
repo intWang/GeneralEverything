@@ -78,6 +78,12 @@ const SHELL_COPY: Record<
   },
 };
 
+const SUGGESTED_QUESTIONS = [
+  "What are the key decisions?",
+  "What follow-ups should I track?",
+  "What should I review first?",
+] as const;
+
 export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
   const [question, setQuestion] = useState("");
   const [answerShell, setAnswerShell] = useState<SubmitJobQuestionResponse | null>(null);
@@ -146,6 +152,15 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
     }
   }
 
+  function applySuggestedQuestion(nextQuestion: string) {
+    if (!copy.canDraft || isSubmitting) {
+      return;
+    }
+
+    setSubmitError(null);
+    setQuestion(nextQuestion);
+  }
+
   return (
     <div className={styles.askAiShell} data-job-id={jobId}>
       <p className={styles.tabStateLabel} data-state={shellState}>
@@ -156,6 +171,27 @@ export function AskAiTab({ jobId, shellState = "queued" }: AskAiTabProps) {
       <p className={styles.askAiStatus} data-ready={isReady}>
         {copy.readyMessage}
       </p>
+      {copy.canDraft ? (
+        <section
+          aria-label="Suggested questions"
+          className={styles.askAiSuggestions}
+        >
+          <p className={styles.askAiSuggestionLabel}>Suggested questions</p>
+          <div className={styles.askAiSuggestionList}>
+            {SUGGESTED_QUESTIONS.map((suggestedQuestion) => (
+              <button
+                className={styles.askAiSuggestionButton}
+                disabled={isSubmitting}
+                key={suggestedQuestion}
+                onClick={() => applySuggestedQuestion(suggestedQuestion)}
+                type="button"
+              >
+                {suggestedQuestion}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <form className={styles.askAiComposer} onSubmit={handleSubmit}>
         <label className={styles.askAiLabel} htmlFor="ask-ai-question">
           Ask a question

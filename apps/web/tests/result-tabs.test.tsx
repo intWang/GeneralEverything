@@ -686,6 +686,27 @@ test("unlocks Ask AI once transcript threshold and stable shells are available",
   expect(screen.getByRole("button", { name: "Submit question" })).toBeEnabled();
 });
 
+test("fills the Ask AI composer from a suggested question", () => {
+  render(
+    <AITabs
+      activeJobId="job-123"
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapStatus="ready"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+    />,
+  );
+
+  fireEvent.click(screen.getByRole("tab", { name: "Ask AI" }));
+  fireEvent.click(screen.getByRole("button", { name: "What are the key decisions?" }));
+
+  expect(screen.getByLabelText("Ask a question")).toHaveValue(
+    "What are the key decisions?",
+  );
+  expect(screen.getByRole("button", { name: "Submit question" })).toBeEnabled();
+});
+
 test("submits a grounded Ask AI question and renders the backend answer shell", async () => {
   vi.mocked(api.submitJobQuestion).mockResolvedValue({
     answer:
