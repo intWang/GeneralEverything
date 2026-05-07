@@ -106,7 +106,7 @@ test("copies the available AI analysis bundle", async () => {
       ].join("\n"),
     );
   });
-  expect(screen.getByText("Analysis bundle copied")).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("Analysis bundle copied");
 });
 
 test("offers the AI analysis bundle as a markdown download", () => {

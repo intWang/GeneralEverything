@@ -638,12 +638,22 @@ export function AITabs({
             {analysisPreviewIsOpen ? "Hide preview" : "Preview bundle"}
           </button>
           {analysisCopyStatus === "copied" ? (
-            <span className={styles.analysisBundleStatus}>
+            <span
+              aria-live="polite"
+              className={styles.analysisBundleStatus}
+              role="status"
+            >
               Analysis bundle copied
             </span>
           ) : null}
           {analysisCopyStatus === "failed" ? (
-            <span className={styles.analysisBundleStatus}>Copy unavailable</span>
+            <span
+              aria-live="polite"
+              className={styles.analysisBundleStatus}
+              role="status"
+            >
+              Copy unavailable
+            </span>
           ) : null}
           {analysisPreviewIsOpen ? (
             <pre
