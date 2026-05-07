@@ -160,6 +160,7 @@ test("summarizes which sections are included in the AI analysis bundle", () => {
   expect(within(contents).getByText("Summary")).toBeInTheDocument();
   expect(within(contents).getByText("Transcript")).toBeInTheDocument();
   expect(within(contents).getByText("Mind Map")).toBeInTheDocument();
+  expect(within(contents).getByText(/\d+ chars/)).toBeInTheDocument();
 });
 
 test("shows a live summary warmup state before the first transcript segments arrive", () => {

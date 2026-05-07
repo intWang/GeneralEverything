@@ -614,6 +614,9 @@ export function AITabs({
                 {label}
               </span>
             ))}
+            <span className={styles.analysisBundleSizePill}>
+              {analysisBundleText.length} chars
+            </span>
           </div>
           {analysisBundleDownloadHref ? (
             <a
