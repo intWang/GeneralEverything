@@ -389,6 +389,7 @@ export function AITabs({
   const [summaryBadgePulse, setSummaryBadgePulse] = useState(false);
   const [analysisCopyStatus, setAnalysisCopyStatus] =
     useState<AnalysisCopyStatus>("idle");
+  const [analysisPreviewIsOpen, setAnalysisPreviewIsOpen] = useState(false);
   const shellStates = deriveTabShellStates(jobStatus, jobStage, transcriptSegmentCount);
   const hasBackendPartialSummary = Boolean(summarySourceText && summaryStatus === "processing");
   const provisionalSummary = buildProvisionalSummary(
@@ -532,6 +533,7 @@ export function AITabs({
 
   useEffect(() => {
     setAnalysisCopyStatus("idle");
+    setAnalysisPreviewIsOpen(false);
   }, [activeJobId, analysisBundleText]);
 
   async function copyAnalysisBundleToClipboard() {
@@ -627,6 +629,14 @@ export function AITabs({
               Download .md
             </a>
           ) : null}
+          <button
+            aria-expanded={analysisPreviewIsOpen}
+            className={styles.analysisBundlePreviewButton}
+            onClick={() => setAnalysisPreviewIsOpen((isOpen) => !isOpen)}
+            type="button"
+          >
+            {analysisPreviewIsOpen ? "Hide preview" : "Preview bundle"}
+          </button>
           {analysisCopyStatus === "copied" ? (
             <span className={styles.analysisBundleStatus}>
               Analysis bundle copied
@@ -634,6 +644,14 @@ export function AITabs({
           ) : null}
           {analysisCopyStatus === "failed" ? (
             <span className={styles.analysisBundleStatus}>Copy unavailable</span>
+          ) : null}
+          {analysisPreviewIsOpen ? (
+            <pre
+              aria-label="AI analysis markdown preview"
+              className={styles.analysisBundlePreview}
+            >
+              {analysisBundleText}
+            </pre>
           ) : null}
         </div>
       ) : null}

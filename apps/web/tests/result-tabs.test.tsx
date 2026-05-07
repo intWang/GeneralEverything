@@ -163,6 +163,33 @@ test("summarizes which sections are included in the AI analysis bundle", () => {
   expect(within(contents).getByText(/\d+ chars/)).toBeInTheDocument();
 });
 
+test("toggles a markdown preview for the AI analysis bundle", () => {
+  render(
+    <AITabs
+      jobStage="mindmap_generated"
+      jobStatus="running"
+      mindmapPreviewText="Product launch, training"
+      mindmapStatus="ready"
+      summarySourceText="录音确认了产品发布时间，并安排了团队培训。"
+      summaryStatus="ready"
+      transcriptSegmentCount={3}
+      transcriptSourceText={"第一行字幕\n第二行字幕"}
+      transcriptStatus="ready"
+    />,
+  );
+
+  expect(
+    screen.queryByLabelText("AI analysis markdown preview"),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Preview bundle" }));
+
+  const preview = screen.getByLabelText("AI analysis markdown preview");
+  expect(preview).toHaveTextContent("## Summary");
+  expect(preview).toHaveTextContent("第一行字幕");
+  expect(screen.getByRole("button", { name: "Hide preview" })).toBeInTheDocument();
+});
+
 test("shows a live summary warmup state before the first transcript segments arrive", () => {
   render(
     <AITabs
