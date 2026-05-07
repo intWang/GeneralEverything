@@ -1,3 +1,4 @@
+import asyncio
 import inspect
 import json
 from types import SimpleNamespace
@@ -55,6 +56,14 @@ def _apply_public_video_download_shell(job, download_shell: PublicVideoDownloadS
     job.download_artifact_path = download_shell.artifact_path
     job.status = JobStatus.RUNNING
     job.stage = download_shell.stage
+
+
+def _apply_public_video_download_progress(job, progress_payload: dict) -> None:
+    job.download_progress_json = json.dumps(progress_payload)
+    job.download_status = progress_payload.get("status") or "downloading"
+    if progress_payload.get("status") == "downloading":
+        job.status = JobStatus.RUNNING
+        job.stage = "downloading"
 
 
 def _mark_public_video_probe_failure(job, exc: PublicVideoProbeError) -> None:
@@ -223,6 +232,29 @@ async def _publish_event(publisher, event_name: str, payload: dict) -> None:
         await result
 
 
+async def _flush_download_progress_awaitables(progress_awaitables: list) -> None:
+    if not progress_awaitables:
+        return
+
+    awaitables = list(progress_awaitables)
+    progress_awaitables.clear()
+    await asyncio.gather(*awaitables, return_exceptions=True)
+
+
+def _accepts_keyword_argument(callable_value, argument_name: str) -> bool:
+    try:
+        signature = inspect.signature(callable_value)
+    except (TypeError, ValueError):
+        return False
+
+    for parameter in signature.parameters.values():
+        if parameter.kind == inspect.Parameter.VAR_KEYWORD:
+            return True
+        if parameter.name == argument_name:
+            return True
+    return False
+
+
 async def _publish_public_video_qa_ready(
     *,
     publisher,
@@ -265,11 +297,35 @@ async def _execute_public_video_download(
     )
 
     planned_download = await _resolve(plan_download_shell(job))
-    try:
-        download_shell = await _resolve(
-            execute_download_shell(job, planned=planned_download)
+    progress_awaitables = []
+
+    def on_download_progress(progress_payload: dict) -> None:
+        payload = (
+            progress_payload.model_dump()
+            if hasattr(progress_payload, "model_dump")
+            else dict(progress_payload)
         )
+        _apply_public_video_download_progress(job, payload)
+
+        persist_result = persist_job(job)
+        if inspect.isawaitable(persist_result):
+            progress_awaitables.append(persist_result)
+
+        publish_result = publisher(
+            "video.download.progress",
+            {"job_id": str(job_id), "progress": payload},
+        )
+        if inspect.isawaitable(publish_result):
+            progress_awaitables.append(publish_result)
+
+    download_kwargs = {"planned": planned_download}
+    if _accepts_keyword_argument(execute_download_shell, "on_progress"):
+        download_kwargs["on_progress"] = on_download_progress
+
+    try:
+        download_shell = await _resolve(execute_download_shell(job, **download_kwargs))
     except PublicVideoDownloadError as exc:
+        await _flush_download_progress_awaitables(progress_awaitables)
         _mark_public_video_download_failure(job, exc)
         await _resolve(persist_job(job))
         await _publish_event(
@@ -282,6 +338,11 @@ async def _execute_public_video_download(
             },
         )
         return
+    except Exception:
+        await _flush_download_progress_awaitables(progress_awaitables)
+        raise
+
+    await _flush_download_progress_awaitables(progress_awaitables)
 
     _apply_public_video_download_shell(job, download_shell)
     await _resolve(persist_job(job))
