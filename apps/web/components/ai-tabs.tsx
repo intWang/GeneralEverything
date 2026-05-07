@@ -538,6 +538,21 @@ export function AITabs({
     setAnalysisPreviewIsOpen(false);
   }, [activeJobId, analysisBundleText]);
 
+  useEffect(() => {
+    if (!analysisPreviewIsOpen) {
+      return;
+    }
+
+    function closePreviewOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setAnalysisPreviewIsOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", closePreviewOnEscape);
+    return () => document.removeEventListener("keydown", closePreviewOnEscape);
+  }, [analysisPreviewIsOpen]);
+
   async function copyAnalysisBundleToClipboard() {
     if (!analysisBundleText || !navigator.clipboard?.writeText) {
       setAnalysisCopyStatus("failed");

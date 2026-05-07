@@ -203,6 +203,16 @@ test("toggles a markdown preview for the AI analysis bundle", () => {
     "true",
   );
 
+  fireEvent.keyDown(document, { key: "Escape" });
+
+  expect(
+    screen.queryByLabelText("AI analysis markdown preview"),
+  ).not.toBeInTheDocument();
+
+  fireEvent.click(previewButton);
+
+  expect(screen.getByLabelText("AI analysis markdown preview")).toBeInTheDocument();
+
   fireEvent.click(screen.getByRole("button", { name: "Hide preview" }));
 
   expect(
