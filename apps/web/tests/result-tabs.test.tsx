@@ -129,6 +129,7 @@ test("offers the AI analysis bundle as a markdown download", () => {
 
   const downloadLink = screen.getByRole("link", { name: "Download .md" });
 
+  expect(downloadLink).toHaveAttribute("aria-describedby", "analysis-bundle-contents");
   expect(downloadLink).toHaveAttribute("download", "get-analysis-job-123.md");
   expect(downloadLink.getAttribute("href")).toContain("data:text/markdown");
   expect(downloadLink.getAttribute("href")).toContain(

@@ -626,6 +626,7 @@ export function AITabs({
           </div>
           {analysisBundleDownloadHref ? (
             <a
+              aria-describedby={ANALYSIS_BUNDLE_CONTENTS_ID}
               className={styles.analysisBundleDownloadLink}
               download={analysisBundleFilename}
               href={analysisBundleDownloadHref}
