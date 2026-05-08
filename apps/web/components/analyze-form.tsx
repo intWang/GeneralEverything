@@ -4,18 +4,25 @@ import { type FormEvent, useState } from "react";
 
 import styles from "../app/homepage.module.css";
 import { createJob, type CreateJobResponse } from "../lib/api";
-import type { InputMode } from "../lib/types";
+import type { InputMode, InputModeCapability } from "../lib/types";
 
 type AnalyzeFormProps = {
+  capabilityStatus?: "error" | "loading" | "ready";
   inputMode: InputMode;
   onJobCreated?: (job: CreateJobResponse) => void;
+  ringCentralCapability?: InputModeCapability | null;
 };
 
 export function AnalyzeForm({
+  capabilityStatus = "ready",
   inputMode,
   onJobCreated,
+  ringCentralCapability = null,
 }: AnalyzeFormProps) {
   const isRingCentralMode = inputMode === "ringcentral_recording";
+  const ringCentralIsReady = Boolean(ringCentralCapability?.enabled);
+  const ringCentralIsLoading = isRingCentralMode && capabilityStatus === "loading";
+  const ringCentralIsBlocked = isRingCentralMode && !ringCentralIsReady;
   const [sourceUrl, setSourceUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -25,6 +32,11 @@ export function AnalyzeForm({
 
     if (!sourceUrl.trim()) {
       setFeedback("Paste a video URL to begin.");
+      return;
+    }
+
+    if (ringCentralIsBlocked) {
+      setFeedback("RingCentral authentication is required before analysis can start.");
       return;
     }
 
@@ -50,18 +62,20 @@ export function AnalyzeForm({
         <div className={styles.modeNotice}>
           <p className={styles.modeNoticeTitle}>RingCentral workspace</p>
           <p className={styles.modeNoticeBody}>
-            RingCentral connection will be added in a later task.
+            {ringCentralIsLoading
+              ? "Checking whether the API server has RingCentral recording access..."
+              : ringCentralCapability?.message ??
+                "RingCentral authentication is required before analysis can start."}
           </p>
           <p className={styles.modeNoticeBody}>
-            RingCentral authentication is required before analysis can start.
+            {capabilityStatus === "error"
+              ? "GET could not load the server capability status. Public video mode is still available."
+              : ringCentralCapability?.suggestion ??
+                "Configure RingCentral cookies on the API server, then retry."}
           </p>
-          <button
-            className={styles.secondaryButton}
-            disabled
-            type="button"
-          >
-            Connect RingCentral (coming soon)
-          </button>
+          <span className={styles.modeNoticeStatus}>
+            {ringCentralIsReady ? "Server auth ready" : "Server auth required"}
+          </span>
         </div>
       ) : null}
       <label className={styles.fieldLabel} htmlFor="source-url">
@@ -82,15 +96,19 @@ export function AnalyzeForm({
       <button
         aria-label={
           isRingCentralMode
-            ? "Analyze (blocked until RingCentral auth is available)"
+            ? ringCentralIsReady
+              ? "Analyze RingCentral recording"
+              : "Analyze (blocked until RingCentral auth is available)"
             : "Analyze"
         }
         className={styles.primaryButton}
-        disabled={isSubmitting || isRingCentralMode}
+        disabled={isSubmitting || ringCentralIsBlocked}
         type="submit"
       >
         {isRingCentralMode
-          ? "Analyze"
+          ? isSubmitting
+            ? "Analyzing..."
+            : "Analyze"
           : isSubmitting
             ? "Analyzing..."
             : "Analyze"}

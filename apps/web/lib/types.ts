@@ -1,5 +1,23 @@
 export type InputMode = "public_video" | "ringcentral_recording";
 
+export type InputModeCapability = {
+  auth_configured: boolean;
+  auth_method: "cookie_file" | "browser_cookies" | null | (string & {});
+  enabled: boolean;
+  label: string;
+  message: string;
+  status: "ready" | "requires_server_auth" | (string & {});
+  suggestion: string;
+};
+
+export type AppCapabilities = {
+  input_modes: {
+    public_video: InputModeCapability;
+    ringcentral_recording: InputModeCapability;
+    [key: string]: InputModeCapability;
+  };
+};
+
 export type JobStatus = "queued" | "running" | "failed" | "completed";
 export type JobStage =
   | "queued"

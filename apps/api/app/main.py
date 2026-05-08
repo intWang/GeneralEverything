@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes.capabilities import router as capabilities_router
 from app.api.routes.events import router as events_router
 from app.api.routes.health import router as health_router
 from app.api.routes.jobs import router as jobs_router
@@ -19,6 +20,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(capabilities_router)
 app.include_router(events_router)
 app.include_router(health_router)
 app.include_router(jobs_router)

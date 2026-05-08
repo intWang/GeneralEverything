@@ -1,4 +1,4 @@
-import type { JobRecord } from "./types";
+import type { AppCapabilities, JobRecord } from "./types";
 
 export type CreateJobResponse = JobRecord;
 export type AskAiStructuredReference = {
@@ -86,6 +86,10 @@ export async function createJob(sourceUrl: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+}
+
+export function getCapabilities() {
+  return readJson<AppCapabilities>(buildApiUrl("/capabilities"));
 }
 
 export function getJob(jobId: string) {

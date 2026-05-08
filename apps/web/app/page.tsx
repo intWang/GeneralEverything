@@ -12,10 +12,18 @@ import { JobHistoryPanel } from "../components/job-history-panel";
 import { ReportExportPanel } from "../components/report-export-panel";
 import { StatusTimeline } from "../components/status-timeline";
 import { VideoInfoPanel } from "../components/video-info-panel";
-import { deleteJob, getJob, listJobs, retryJob, updateJob } from "../lib/api";
+import {
+  deleteJob,
+  getCapabilities,
+  getJob,
+  listJobs,
+  retryJob,
+  updateJob,
+} from "../lib/api";
 import { subscribeToJobEvents } from "../lib/sse";
 import type {
   DownloadProgress,
+  InputModeCapability,
   InputMode,
   JobRecord,
   MindMapNode,
@@ -384,6 +392,11 @@ function getDownloadProgressStage(
 
 export default function HomePage() {
   const [inputMode, setInputMode] = useState<InputMode>("public_video");
+  const [capabilityStatus, setCapabilityStatus] = useState<"error" | "loading" | "ready">(
+    "loading",
+  );
+  const [ringCentralCapability, setRingCentralCapability] =
+    useState<InputModeCapability | null>(null);
   const [jobState, setJobState] = useState<JobRecord | null>(null);
   const [jobHistory, setJobHistory] = useState<JobRecord[]>([]);
   const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
@@ -490,6 +503,15 @@ export default function HomePage() {
 
   useEffect(() => {
     void refreshHistory();
+    void getCapabilities()
+      .then((capabilities) => {
+        setRingCentralCapability(capabilities.input_modes.ringcentral_recording);
+        setCapabilityStatus("ready");
+      })
+      .catch(() => {
+        setRingCentralCapability(null);
+        setCapabilityStatus("error");
+      });
 
     const jobId = readJobIdFromUrl();
 
@@ -990,7 +1012,12 @@ export default function HomePage() {
         inputArea={
           <div className={styles.heroFormStack}>
             <InputSwitcher onChange={setInputMode} value={inputMode} />
-            <AnalyzeForm inputMode={inputMode} onJobCreated={handleJobCreated} />
+            <AnalyzeForm
+              capabilityStatus={capabilityStatus}
+              inputMode={inputMode}
+              onJobCreated={handleJobCreated}
+              ringCentralCapability={ringCentralCapability}
+            />
           </div>
         }
       />

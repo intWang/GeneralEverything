@@ -178,13 +178,13 @@ The first authenticated RingCentral download PoC is available behind backend-onl
 - `RINGCENTRAL_COOKIES_FROM_BROWSER=chrome`
 - `RINGCENTRAL_COOKIES_FROM_BROWSER=chrome:Default`
 
-GET passes that authentication context to `yt-dlp` with either `--cookies` or `--cookies-from-browser`. The cookie path/browser source is never returned by the API, stored on jobs, or included in reports. If neither setting is configured, RingCentral jobs fail safely with `ringcentral_auth_required` diagnostics.
+GET passes that authentication context to `yt-dlp` with either `--cookies` or `--cookies-from-browser`. The cookie path/browser source is never returned by the API, stored on jobs, or included in reports. The API also exposes `/api/capabilities`, which tells the web app whether the RingCentral input mode is ready without exposing the configured cookie path or browser profile.
 
-Real company recording success still depends on the local machine/session having access to the recording in the configured browser or cookie file. The next milestone is to harden this PoC into a guided user flow and add deeper diagnostics for expired sessions, unavailable recordings, and permission failures.
+If neither setting is configured, the web app keeps the RingCentral Analyze button blocked with server-auth guidance, and any backend RingCentral job still fails safely with `ringcentral_auth_required` diagnostics. Real company recording success still depends on the local machine/session having access to the recording in the configured browser or cookie file. The next milestone is to add deeper diagnostics for expired sessions, unavailable recordings, and permission failures.
 
 ## Current Limitations
 
-- RingCentral authenticated media download is a backend PoC; it still needs a guided user flow and production hardening.
+- RingCentral authenticated media download is available as a server-configured PoC; it still needs production hardening and richer permission/session diagnostics.
 - Some AI outputs remain shell/fixture/rule-backed rather than fully model-backed.
 - Production deployment packaging is not complete yet.
 - Markdown export is supported; PDF/DOCX export is not implemented.
@@ -192,7 +192,7 @@ Real company recording success still depends on the local machine/session having
 
 ## Recommended Next Work
 
-1. Harden the authenticated RingCentral recording download PoC into a guided user flow.
+1. Add deeper RingCentral diagnostics for expired sessions, unavailable recordings, and permission failures.
 2. Productionize streaming transcription with persisted partial segments.
 3. Replace shell summary, mind map, and Ask AI output with model-backed provider interfaces.
 4. Add a dedicated `/jobs/[id]` detail page.

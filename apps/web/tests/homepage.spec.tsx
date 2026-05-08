@@ -7,6 +7,7 @@ import * as sse from "../lib/sse";
 
 vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
+  getCapabilities: vi.fn(),
   getJob: vi.fn(),
   listJobs: vi.fn(),
   submitJobQuestion: vi.fn(),
@@ -20,6 +21,29 @@ beforeEach(() => {
   vi.clearAllMocks();
   window.history.replaceState({}, "", "/");
   vi.mocked(sse.subscribeToJobEvents).mockReturnValue(() => undefined);
+  vi.mocked(api.getCapabilities).mockResolvedValue({
+    input_modes: {
+      public_video: {
+        auth_configured: true,
+        auth_method: null,
+        enabled: true,
+        label: "Public Video URL",
+        message: "Public video analysis is available.",
+        status: "ready",
+        suggestion: "Paste a public video URL to start.",
+      },
+      ringcentral_recording: {
+        auth_configured: false,
+        auth_method: null,
+        enabled: false,
+        label: "RingCentral Recording URL",
+        message: "RingCentral server authentication is not configured.",
+        status: "requires_server_auth",
+        suggestion: "Configure RingCentral cookies on the API server.",
+      },
+    },
+  });
+  vi.mocked(api.listJobs).mockResolvedValue([]);
 });
 
 test("smoke: homepage opens the Ask AI shell for a completed job", async () => {

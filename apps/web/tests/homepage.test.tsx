@@ -10,6 +10,7 @@ import type { JobRecord } from "../lib/types";
 vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
   deleteJob: vi.fn(),
+  getCapabilities: vi.fn(),
   getJob: vi.fn(),
   listJobs: vi.fn(),
   retryJob: vi.fn(),
@@ -27,6 +28,28 @@ beforeEach(() => {
   vi.clearAllMocks();
   window.history.replaceState({}, "", "/");
   vi.mocked(sse.subscribeToJobEvents).mockReturnValue(() => undefined);
+  vi.mocked(api.getCapabilities).mockResolvedValue({
+    input_modes: {
+      public_video: {
+        auth_configured: true,
+        auth_method: null,
+        enabled: true,
+        label: "Public Video URL",
+        message: "Public video analysis is available.",
+        status: "ready",
+        suggestion: "Paste a public video URL to start.",
+      },
+      ringcentral_recording: {
+        auth_configured: false,
+        auth_method: null,
+        enabled: false,
+        label: "RingCentral Recording URL",
+        message: "RingCentral server authentication is not configured.",
+        status: "requires_server_auth",
+        suggestion: "Configure RingCentral cookies on the API server.",
+      },
+    },
+  });
   vi.mocked(api.listJobs).mockResolvedValue([]);
   vi.useRealTimers();
 });
@@ -238,19 +261,23 @@ test("scrolls the user into the results workspace after starting analysis", asyn
   });
 });
 
-test("shows a RingCentral stub prompt when that mode is selected", () => {
+test("shows RingCentral server auth guidance when that mode is selected", async () => {
   render(<HomePage />);
 
   fireEvent.click(
     screen.getByRole("radio", { name: "RingCentral Recording URL" }),
   );
 
+  await waitFor(() => {
+    expect(
+      screen.getByText("RingCentral server authentication is not configured."),
+    ).toBeInTheDocument();
+  });
   expect(
-    screen.getByText("RingCentral connection will be added in a later task."),
-  ).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "Connect RingCentral (coming soon)" }),
-  ).toBeInTheDocument();
+    screen.getByRole("button", {
+      name: "Analyze (blocked until RingCentral auth is available)",
+    }),
+  ).toBeDisabled();
 });
 
 test("polls the active job while it is still running", async () => {
