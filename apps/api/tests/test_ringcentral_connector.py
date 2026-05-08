@@ -19,6 +19,7 @@ from app.services.connectors.ringcentral import (
     sanitize_ringcentral_url,
 )
 from app.tasks import process_analysis_job
+from app.services.downloads.public_video import PublicVideoDownloadShell
 
 API_ROOT = Path(__file__).resolve().parents[1]
 ALEMBIC_INI_PATH = API_ROOT / "alembic.ini"
@@ -183,3 +184,59 @@ def test_process_analysis_job_publishes_safe_ringcentral_diagnostic() -> None:
     assert "code=secret" not in serialized_diagnostics
     assert "token=hidden" not in serialized_diagnostics
     assert "access_token=also-hidden" not in serialized_diagnostics
+
+
+def test_process_analysis_job_uses_ringcentral_download_runner_when_available(
+    tmp_path: Path,
+) -> None:
+    source_url = (
+        "https://xmrupxmn-rxe-1-v.int.rclabenv.com/recordings/abc"
+        "?isMeetingId=true&code=secret"
+    )
+    job = AnalysisJob(
+        input_mode=InputMode.RINGCENTRAL_RECORDING,
+        source_url=source_url,
+    )
+    events: list[tuple[str, dict]] = []
+    persisted_jobs: list[tuple[str | None, str]] = []
+
+    def persist_job(updated_job: AnalysisJob) -> None:
+        persisted_jobs.append((updated_job.download_status, updated_job.stage))
+
+    def execute_ringcentral_download(_job, planned=None, auth=None):
+        assert planned is not None
+        assert auth is not None
+        return PublicVideoDownloadShell(
+            status="ready",
+            stage="download_ready",
+            executor="yt-dlp:ringcentral",
+            format_id="rc-best",
+            format_label="RingCentral recording stream",
+            artifact_path=str(tmp_path / "recording.mp4"),
+            available_formats=planned.available_formats,
+        )
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": lambda event_name, payload: events.append(
+                    (event_name, payload)
+                ),
+                "load_job": lambda _job_id: job,
+                "persist_job": persist_job,
+                "ringcentral_download_auth": {"cookies_from_browser": "chrome"},
+                "execute_ringcentral_download_shell": execute_ringcentral_download,
+            },
+            job.id,
+        )
+    )
+
+    serialized_events = json.dumps(events)
+    assert job.status == JobStatus.RUNNING
+    assert job.stage == "download_ready"
+    assert job.download_status == "ready"
+    assert job.download_artifact_path == str(tmp_path / "recording.mp4")
+    assert ("ready", "download_ready") in persisted_jobs
+    assert any(event_name == "video.download" for event_name, _payload in events)
+    assert "ringcentral_auth_required" not in serialized_events
+    assert "code=secret" not in serialized_events

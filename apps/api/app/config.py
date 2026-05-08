@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     openai_base_url: str = "https://api.openai.com/v1"
     translation_model: str = "gpt-5-mini"
+    ringcentral_cookie_file: str | None = None
+    ringcentral_cookies_from_browser: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

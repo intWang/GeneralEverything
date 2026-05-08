@@ -83,6 +83,8 @@ TRANSCRIPT_ENABLE_VAD=true
 OPENAI_API_KEY=
 OPENAI_BASE_URL=https://api.openai.com/v1
 TRANSLATION_MODEL=gpt-5-mini
+RINGCENTRAL_COOKIE_FILE=
+RINGCENTRAL_COOKIES_FROM_BROWSER=
 ```
 
 Do not commit real RingCentral links, signed query parameters, cookies, tokens, or `.env` files.
@@ -170,11 +172,19 @@ CI checks:
 
 RingCentral recording URLs are detected, sanitized, persisted safely, queued into the analysis runner, and surfaced with safe diagnostics. Sensitive query parameters such as `code`, `token`, `access_token`, `auth`, and `jwt` are removed before storage/reporting.
 
-Real internal RingCentral recording download is not yet complete end-to-end because company recordings may require authenticated browser/session behavior. The next major backend milestone is an authenticated RingCentral capture/download strategy that can safely use user-provided browser context without leaking credentials.
+The first authenticated RingCentral download PoC is available behind backend-only configuration:
+
+- `RINGCENTRAL_COOKIE_FILE=/absolute/path/to/cookies.txt`
+- `RINGCENTRAL_COOKIES_FROM_BROWSER=chrome`
+- `RINGCENTRAL_COOKIES_FROM_BROWSER=chrome:Default`
+
+GET passes that authentication context to `yt-dlp` with either `--cookies` or `--cookies-from-browser`. The cookie path/browser source is never returned by the API, stored on jobs, or included in reports. If neither setting is configured, RingCentral jobs fail safely with `ringcentral_auth_required` diagnostics.
+
+Real company recording success still depends on the local machine/session having access to the recording in the configured browser or cookie file. The next milestone is to harden this PoC into a guided user flow and add deeper diagnostics for expired sessions, unavailable recordings, and permission failures.
 
 ## Current Limitations
 
-- Real RingCentral authenticated media download still needs a dedicated implementation.
+- RingCentral authenticated media download is a backend PoC; it still needs a guided user flow and production hardening.
 - Some AI outputs remain shell/fixture/rule-backed rather than fully model-backed.
 - Production deployment packaging is not complete yet.
 - Markdown export is supported; PDF/DOCX export is not implemented.
@@ -182,7 +192,7 @@ Real internal RingCentral recording download is not yet complete end-to-end beca
 
 ## Recommended Next Work
 
-1. Implement authenticated RingCentral recording download PoC.
+1. Harden the authenticated RingCentral recording download PoC into a guided user flow.
 2. Productionize streaming transcription with persisted partial segments.
 3. Replace shell summary, mind map, and Ask AI output with model-backed provider interfaces.
 4. Add a dedicated `/jobs/[id]` detail page.

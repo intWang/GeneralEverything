@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 from app.models.job import InputMode, JobStatus
+from app.config import settings
 from app.services.connectors.public_video import (
     PublicVideoProbeError,
     probe_public_video_metadata,
@@ -15,6 +16,12 @@ from app.services.downloads.public_video import (
     PublicVideoDownloadShell,
     execute_public_video_download_shell,
     plan_public_video_download_shell,
+)
+from app.services.downloads.ringcentral import (
+    RingCentralDownloadAuth,
+    RingCentralDownloadError,
+    execute_ringcentral_download_shell,
+    plan_ringcentral_download_shell,
 )
 from app.services.transcripts.public_video import (
     PublicVideoTranscriptExecutionError,
@@ -91,6 +98,26 @@ def _mark_ringcentral_probe_failure(job, exc: RingCentralProbeError) -> None:
     job.status = JobStatus.FAILED
     job.stage = exc.reason
     job.diagnostics_json = json.dumps([exc.diagnostic().model_dump()])
+
+
+def _mark_ringcentral_download_failure(job, exc: RingCentralDownloadError) -> None:
+    job.status = JobStatus.FAILED
+    job.stage = exc.reason
+    job.download_status = "failed"
+    job.diagnostics_json = json.dumps(
+        [
+            {
+                "reason": exc.reason,
+                "stage": "download",
+                "message": exc.message,
+                "suggestion": (
+                    "Configure RINGCENTRAL_COOKIE_FILE or "
+                    "RINGCENTRAL_COOKIES_FROM_BROWSER, confirm the recording opens "
+                    "in that authenticated context, then retry."
+                ),
+            }
+        ]
+    )
 
 
 def _apply_public_video_transcript_shell(
@@ -665,6 +692,109 @@ async def _execute_public_video_download(
     )
 
 
+def _get_ringcentral_download_auth(ctx: dict) -> RingCentralDownloadAuth:
+    configured_auth = ctx.get("ringcentral_download_auth")
+    if configured_auth is not None:
+        return RingCentralDownloadAuth.from_mapping(configured_auth)
+
+    return RingCentralDownloadAuth(
+        cookie_file=settings.ringcentral_cookie_file,
+        cookies_from_browser=settings.ringcentral_cookies_from_browser,
+    )
+
+
+async def _execute_ringcentral_download(
+    *,
+    ctx: dict,
+    publisher,
+    persist_job,
+    job,
+    job_id: UUID,
+) -> None:
+    plan_download_shell = (
+        ctx.get("plan_ringcentral_download_shell") or plan_ringcentral_download_shell
+    )
+    execute_download_shell = (
+        ctx.get("execute_ringcentral_download_shell")
+        or execute_ringcentral_download_shell
+    )
+    auth = _get_ringcentral_download_auth(ctx)
+    if not auth.has_context():
+        exc = RingCentralDownloadError(
+            "ringcentral_auth_required",
+            "RingCentral download requires a configured cookie file or browser cookie source.",
+        )
+        _mark_ringcentral_download_failure(job, exc)
+        await _resolve(persist_job(job))
+        await _publish_event(
+            publisher,
+            "job.status",
+            {
+                "job_id": str(job_id),
+                "status": job.status.value,
+                "stage": job.stage,
+            },
+        )
+        await _publish_event(
+            publisher,
+            "error",
+            {
+                "job_id": str(job_id),
+                "reason": exc.reason,
+                "message": exc.message,
+            },
+        )
+        return
+
+    planned_download = await _resolve(plan_download_shell(job))
+    _apply_public_video_download_shell(job, planned_download)
+    await _resolve(persist_job(job))
+
+    try:
+        download_shell = await _resolve(
+            execute_download_shell(job, planned=planned_download, auth=auth)
+        )
+    except RingCentralDownloadError as exc:
+        _mark_ringcentral_download_failure(job, exc)
+        await _resolve(persist_job(job))
+        await _publish_event(
+            publisher,
+            "job.status",
+            {
+                "job_id": str(job_id),
+                "status": job.status.value,
+                "stage": job.stage,
+            },
+        )
+        await _publish_event(
+            publisher,
+            "error",
+            {
+                "job_id": str(job_id),
+                "reason": exc.reason,
+                "message": exc.message,
+            },
+        )
+        return
+
+    _apply_public_video_download_shell(job, download_shell)
+    await _resolve(persist_job(job))
+    await _publish_event(
+        publisher,
+        "video.download",
+        {"job_id": str(job_id), "download": download_shell.model_dump()},
+    )
+    await _publish_event(
+        publisher,
+        "job.status",
+        {
+            "job_id": str(job_id),
+            "status": job.status.value,
+            "stage": job.stage,
+        },
+    )
+
+
 async def process_analysis_job(ctx: dict, job_id: UUID) -> None:
     """Publish metadata for a queued analysis job when enough context is available."""
 
@@ -688,30 +818,12 @@ async def process_analysis_job(ctx: dict, job_id: UUID) -> None:
         if job.status in {JobStatus.FAILED, JobStatus.COMPLETED}:
             return None
 
-        exc = RingCentralProbeError(
-            reason="ringcentral_auth_required",
-            message="This RingCentral recording requires a signed-in session.",
-        )
-        _mark_ringcentral_probe_failure(job, exc)
-        await _resolve(persist_job(job))
-        await _publish_event(
-            publisher,
-            "job.status",
-            {
-                "job_id": str(job_id),
-                "status": job.status.value,
-                "stage": job.stage,
-            },
-        )
-        await _publish_event(
-            publisher,
-            "error",
-            {
-                "job_id": str(job_id),
-                "reason": exc.reason,
-                "message": exc.message,
-                "diagnostic": exc.diagnostic().model_dump(),
-            },
+        await _execute_ringcentral_download(
+            ctx=ctx,
+            publisher=publisher,
+            persist_job=persist_job,
+            job=job,
+            job_id=job_id,
         )
         return None
 
