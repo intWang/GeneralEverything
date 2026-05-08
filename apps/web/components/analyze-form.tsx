@@ -3,7 +3,11 @@
 import { type FormEvent, useState } from "react";
 
 import styles from "../app/homepage.module.css";
-import { createJob, type CreateJobResponse } from "../lib/api";
+import {
+  createJob,
+  probeRingCentralAccess,
+  type CreateJobResponse,
+} from "../lib/api";
 import type { InputMode, InputModeCapability } from "../lib/types";
 
 type AnalyzeFormProps = {
@@ -25,12 +29,20 @@ export function AnalyzeForm({
   const ringCentralIsBlocked = isRingCentralMode && !ringCentralIsReady;
   const [sourceUrl, setSourceUrl] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [accessFeedback, setAccessFeedback] = useState<{
+    message: string;
+    suggestion?: string;
+  } | null>(null);
+  const trimmedSourceUrl = sourceUrl.trim();
+  const canCheckRingCentralAccess =
+    isRingCentralMode && ringCentralIsReady && Boolean(trimmedSourceUrl);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!sourceUrl.trim()) {
+    if (!trimmedSourceUrl) {
       setFeedback("Paste a video URL to begin.");
       return;
     }
@@ -44,7 +56,7 @@ export function AnalyzeForm({
     setFeedback(null);
 
     try {
-      const job = await createJob(sourceUrl.trim());
+      const job = await createJob(trimmedSourceUrl);
       setFeedback("Analysis requested. Live status will appear below.");
       onJobCreated?.(job);
     } catch (error) {
@@ -56,8 +68,54 @@ export function AnalyzeForm({
     }
   }
 
+  async function handleCheckAccess() {
+    if (!trimmedSourceUrl) {
+      setAccessFeedback({ message: "Paste a RingCentral recording URL to check access." });
+      return;
+    }
+
+    if (!canCheckRingCentralAccess) {
+      setAccessFeedback({
+        message: "RingCentral server authentication is required before checking access.",
+      });
+      return;
+    }
+
+    setIsCheckingAccess(true);
+    setAccessFeedback(null);
+
+    try {
+      const probe = await probeRingCentralAccess(trimmedSourceUrl);
+      if (probe.ok) {
+        setAccessFeedback({
+          message: "RingCentral access ready. You can analyze this recording.",
+        });
+      } else {
+        setAccessFeedback({
+          message:
+            probe.diagnostic?.message ??
+            "RingCentral access could not be confirmed.",
+          suggestion: probe.diagnostic?.suggestion,
+        });
+      }
+    } catch (error) {
+      setAccessFeedback({
+        message:
+          error instanceof Error
+            ? error.message
+            : "RingCentral access could not be checked.",
+      });
+    } finally {
+      setIsCheckingAccess(false);
+    }
+  }
+
   return (
-    <form className={styles.formCard} onSubmit={handleSubmit}>
+    <form
+      className={styles.formCard}
+      data-probe-layout={canCheckRingCentralAccess ? "true" : "false"}
+      onSubmit={handleSubmit}
+    >
       {isRingCentralMode ? (
         <div className={styles.modeNotice}>
           <p className={styles.modeNoticeTitle}>RingCentral workspace</p>
@@ -85,7 +143,10 @@ export function AnalyzeForm({
         className={styles.textInput}
         id="source-url"
         name="sourceUrl"
-        onChange={(event) => setSourceUrl(event.target.value)}
+        onChange={(event) => {
+          setSourceUrl(event.target.value);
+          setAccessFeedback(null);
+        }}
         placeholder={
           isRingCentralMode
             ? "Paste a RingCentral recording URL"
@@ -93,6 +154,16 @@ export function AnalyzeForm({
         }
         value={sourceUrl}
       />
+      {isRingCentralMode && ringCentralIsReady ? (
+        <button
+          className={`${styles.secondaryButton} ${styles.probeButton}`}
+          disabled={!canCheckRingCentralAccess || isCheckingAccess || isSubmitting}
+          onClick={handleCheckAccess}
+          type="button"
+        >
+          {isCheckingAccess ? "Checking..." : "Check access"}
+        </button>
+      ) : null}
       <button
         aria-label={
           isRingCentralMode
@@ -117,6 +188,14 @@ export function AnalyzeForm({
         <p aria-live="polite" className={styles.formFeedback}>
           {feedback}
         </p>
+      ) : null}
+      {accessFeedback ? (
+        <div aria-live="polite" className={styles.formFeedback}>
+          <p className={styles.probeFeedbackMessage}>{accessFeedback.message}</p>
+          {accessFeedback.suggestion ? (
+            <p className={styles.probeFeedbackSuggestion}>{accessFeedback.suggestion}</p>
+          ) : null}
+        </div>
       ) : null}
     </form>
   );

@@ -1,4 +1,4 @@
-import type { AppCapabilities, JobRecord } from "./types";
+import type { AppCapabilities, InputMode, JobRecord } from "./types";
 
 export type CreateJobResponse = JobRecord;
 export type AskAiStructuredReference = {
@@ -29,6 +29,18 @@ export type MarkdownReportExportResponse = {
   generated_at: string;
   job_id: string;
   markdown: string;
+};
+export type RingCentralProbeDiagnostic = {
+  message: string;
+  reason?: string;
+  stage?: string;
+  suggestion?: string;
+};
+export type RingCentralProbeResponse = {
+  diagnostic?: RingCentralProbeDiagnostic | null;
+  input_mode: InputMode;
+  ok: boolean;
+  source_url: string;
 };
 
 export class ApiError extends Error {
@@ -85,6 +97,14 @@ export async function createJob(sourceUrl: string) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export function probeRingCentralAccess(sourceUrl: string) {
+  return readJson<RingCentralProbeResponse>(buildApiUrl("/ringcentral/probe"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source_url: sourceUrl }),
   });
 }
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -187,6 +188,68 @@ def execute_ringcentral_download_shell(
     )
 
 
+def probe_ringcentral_recording_access(
+    source_url: str,
+    *,
+    auth: RingCentralDownloadAuth | None = None,
+) -> dict[str, object]:
+    download_auth = auth or RingCentralDownloadAuth()
+    if not download_auth.has_context():
+        error = RingCentralDownloadError(
+            "ringcentral_auth_required",
+            "RingCentral probe requires a configured cookie file or browser cookie source.",
+        )
+        return {"ok": False, "diagnostic": error.diagnostic().model_dump()}
+
+    command = [
+        *_resolve_yt_dlp_command(),
+        "--skip-download",
+        "--dump-single-json",
+        "--no-playlist",
+    ]
+    command.extend(_build_auth_arguments(download_auth))
+    command.append(sanitize_ringcentral_url(source_url))
+
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        error = RingCentralDownloadError(
+            "tool_missing",
+            "yt-dlp is not installed or not available on PATH.",
+        )
+        return {"ok": False, "diagnostic": error.diagnostic().model_dump()}
+    except OSError as exc:
+        error = RingCentralDownloadError(
+            "download_unavailable",
+            f"Unable to start RingCentral probe: {_redact_sensitive_text(str(exc))}",
+        )
+        return {"ok": False, "diagnostic": error.diagnostic().model_dump()}
+
+    if result.returncode != 0:
+        message = (
+            result.stderr
+            or result.stdout
+            or "yt-dlp failed to probe the RingCentral recording."
+        ).strip()
+        error = RingCentralDownloadError(
+            _classify_failure_reason(message),
+            _redact_sensitive_text(message),
+        )
+        return {"ok": False, "diagnostic": error.diagnostic().model_dump()}
+
+    metadata = _parse_probe_metadata(result.stdout)
+    return {
+        "ok": True,
+        "title": metadata.get("title"),
+        "duration_seconds": metadata.get("duration_seconds"),
+    }
+
+
 def _build_auth_arguments(auth: RingCentralDownloadAuth) -> list[str]:
     if auth.cookie_file:
         return ["--cookies", auth.cookie_file]
@@ -207,6 +270,24 @@ def _redact_sensitive_text(value: str) -> str:
             flags=re.IGNORECASE,
         )
     return redacted
+
+
+def _parse_probe_metadata(stdout: str) -> dict[str, object | None]:
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    if not lines:
+        return {"title": None, "duration_seconds": None}
+
+    try:
+        payload = json.loads(lines[-1])
+    except json.JSONDecodeError:
+        return {"title": None, "duration_seconds": None}
+
+    title = payload.get("title")
+    duration = payload.get("duration")
+    return {
+        "title": title if isinstance(title, str) else None,
+        "duration_seconds": duration if isinstance(duration, int | float) else None,
+    }
 
 
 def _classify_failure_reason(message: str) -> str:

@@ -182,6 +182,8 @@ GET passes that authentication context to `yt-dlp` with either `--cookies` or `-
 
 If neither setting is configured, the web app keeps the RingCentral Analyze button blocked with server-auth guidance, and any backend RingCentral job still fails safely with `ringcentral_auth_required` diagnostics. Runtime download failures are classified into safer, more actionable reasons including `ringcentral_session_expired`, `ringcentral_permission_denied`, `ringcentral_recording_unavailable`, `ringcentral_unsupported_page`, and the generic `ringcentral_download_failed` fallback. The video information panel renders these diagnostics with readable labels and next-step suggestions.
 
+The API also provides `POST /api/ringcentral/probe` for dry-run access checks. It accepts a RingCentral recording URL, sanitizes sensitive query parameters, uses the configured server-side cookie/browser session with `yt-dlp --skip-download --dump-single-json`, and returns either lightweight metadata or a safe diagnostic without creating an analysis job.
+
 Real company recording success still depends on the local machine/session having access to the recording in the configured browser or cookie file. The next milestone is to validate these classifications against real internal recordings and add automated session-refresh guidance.
 
 ## Current Limitations

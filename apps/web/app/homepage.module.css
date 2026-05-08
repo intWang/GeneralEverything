@@ -153,6 +153,10 @@
   box-shadow: 0 22px 54px -34px rgba(17, 24, 39, 0.28);
 }
 
+.formCard[data-probe-layout="true"] {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 .fieldLabel {
   position: absolute;
   width: 1px;
@@ -236,6 +240,12 @@
   color: #374151;
   font: inherit;
   font-weight: 700;
+}
+
+.probeButton {
+  min-height: 4rem;
+  border-radius: 1.1rem;
+  white-space: nowrap;
 }
 
 .chipList {
@@ -413,6 +423,19 @@
   margin: 0.55rem 0 0;
   color: #6b7280;
   line-height: 1.6;
+}
+
+.formFeedback {
+  grid-column: 1 / -1;
+}
+
+.probeFeedbackMessage,
+.probeFeedbackSuggestion {
+  margin: 0;
+}
+
+.probeFeedbackSuggestion {
+  margin-top: 0.25rem;
 }
 
 .modeNotice {
@@ -1664,6 +1687,10 @@
   }
 
   .primaryButton {
+    width: 100%;
+  }
+
+  .probeButton {
     width: 100%;
   }
 }

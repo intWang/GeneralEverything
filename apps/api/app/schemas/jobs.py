@@ -4,10 +4,24 @@ import uuid
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 from app.models import InputMode, JobStatus
+from app.services.downloads.progress import DownloadDiagnostic
 
 
 class CreateJobRequest(BaseModel):
     source_url: HttpUrl
+
+
+class RingCentralProbeRequest(BaseModel):
+    source_url: HttpUrl
+
+
+class RingCentralProbeResponse(BaseModel):
+    ok: bool
+    input_mode: InputMode
+    source_url: HttpUrl
+    title: str | None = None
+    duration_seconds: int | None = None
+    diagnostic: DownloadDiagnostic | dict | None = None
 
 
 class UpdateJobRequest(BaseModel):

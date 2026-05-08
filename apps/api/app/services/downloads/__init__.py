@@ -7,6 +7,7 @@ from app.services.downloads.ringcentral import (
     RingCentralDownloadError,
     execute_ringcentral_download_shell,
     plan_ringcentral_download_shell,
+    probe_ringcentral_recording_access,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "execute_ringcentral_download_shell",
     "plan_public_video_download_shell",
     "plan_ringcentral_download_shell",
+    "probe_ringcentral_recording_access",
 ]

@@ -7,6 +7,7 @@ import * as api from "../lib/api";
 vi.mock("../lib/api", () => ({
   createJob: vi.fn(),
   getCapabilities: vi.fn(),
+  probeRingCentralAccess: vi.fn(),
   submitJobQuestion: vi.fn(),
 }));
 
@@ -141,4 +142,85 @@ test("submits RingCentral recordings when server auth is configured", async () =
     stage: "queued",
     status: "queued",
   });
+});
+
+test("checks RingCentral access without creating a job", async () => {
+  const createJob = vi.mocked(api.createJob);
+  const probeRingCentralAccess = vi.mocked(api.probeRingCentralAccess);
+
+  probeRingCentralAccess.mockResolvedValue({
+    input_mode: "ringcentral_recording",
+    ok: true,
+    source_url: "https://app.ringcentral.com/recording/123",
+  });
+
+  render(
+    <AnalyzeForm
+      inputMode="ringcentral_recording"
+      ringCentralCapability={{
+        auth_configured: true,
+        auth_method: "browser_cookies",
+        enabled: true,
+        label: "RingCentral Recording URL",
+        message: "RingCentral recording downloads can use configured browser cookies.",
+        status: "ready",
+        suggestion: "Paste an internal recording URL to start.",
+      }}
+    />,
+  );
+
+  fireEvent.change(screen.getByLabelText("Video source"), {
+    target: { value: "https://app.ringcentral.com/recording/123" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Check access" }));
+
+  await waitFor(() => {
+    expect(probeRingCentralAccess).toHaveBeenCalledWith(
+      "https://app.ringcentral.com/recording/123",
+    );
+  });
+
+  expect(createJob).not.toHaveBeenCalled();
+  expect(screen.getByText("RingCentral access ready. You can analyze this recording.")).toBeInTheDocument();
+});
+
+test("shows RingCentral probe diagnostics without saving the source link", async () => {
+  const createJob = vi.mocked(api.createJob);
+  const probeRingCentralAccess = vi.mocked(api.probeRingCentralAccess);
+
+  probeRingCentralAccess.mockResolvedValue({
+    diagnostic: {
+      message: "The recording requires owner permission.",
+      suggestion: "Ask the meeting owner to grant access, then check again.",
+    },
+    input_mode: "ringcentral_recording",
+    ok: false,
+    source_url: "https://app.ringcentral.com/recording/private",
+  });
+
+  render(
+    <AnalyzeForm
+      inputMode="ringcentral_recording"
+      ringCentralCapability={{
+        auth_configured: true,
+        auth_method: "browser_cookies",
+        enabled: true,
+        label: "RingCentral Recording URL",
+        message: "RingCentral recording downloads can use configured browser cookies.",
+        status: "ready",
+        suggestion: "Paste an internal recording URL to start.",
+      }}
+    />,
+  );
+
+  fireEvent.change(screen.getByLabelText("Video source"), {
+    target: { value: "https://app.ringcentral.com/recording/private" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Check access" }));
+
+  expect(await screen.findByText("The recording requires owner permission.")).toBeInTheDocument();
+  expect(
+    screen.getByText("Ask the meeting owner to grant access, then check again."),
+  ).toBeInTheDocument();
+  expect(createJob).not.toHaveBeenCalled();
 });

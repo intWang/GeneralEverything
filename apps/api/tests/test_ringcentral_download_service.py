@@ -12,6 +12,7 @@ from app.services.downloads.ringcentral import (
     RingCentralDownloadError,
     execute_ringcentral_download_shell,
     plan_ringcentral_download_shell,
+    probe_ringcentral_recording_access,
 )
 
 
@@ -195,3 +196,66 @@ def test_ringcentral_download_error_exposes_diagnostic_payload() -> None:
             "has permission, then retry."
         ),
     }
+
+
+def test_probe_ringcentral_recording_access_uses_lightweight_metadata_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_command: list[str] = []
+
+    def fake_run(command: list[str], **_kwargs) -> CompletedProcess[str]:
+        captured_command.extend(command)
+        return CompletedProcess(
+            args=command,
+            returncode=0,
+            stdout='{"title":"Team sync","duration":123.5}\n',
+            stderr="",
+        )
+
+    monkeypatch.setattr("app.services.downloads.ringcentral.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "app.services.downloads.ringcentral._resolve_yt_dlp_command",
+        lambda: ["yt-dlp"],
+    )
+
+    result = probe_ringcentral_recording_access(
+        "https://xmrupxmn-rxe-1-v.int.rclabenv.com/recordings/abc?code=secret",
+        auth=RingCentralDownloadAuth(cookies_from_browser="chrome"),
+    )
+
+    assert result == {
+        "ok": True,
+        "title": "Team sync",
+        "duration_seconds": 123.5,
+    }
+    assert "--skip-download" in captured_command
+    assert "--dump-single-json" in captured_command
+    assert "--cookies-from-browser" in captured_command
+    assert "code=secret" not in captured_command[-1]
+
+
+def test_probe_ringcentral_recording_access_classifies_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(command: list[str], **_kwargs) -> CompletedProcess[str]:
+        return CompletedProcess(
+            args=command,
+            returncode=1,
+            stdout="",
+            stderr="HTTP Error 403: Forbidden code=secret",
+        )
+
+    monkeypatch.setattr("app.services.downloads.ringcentral.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "app.services.downloads.ringcentral._resolve_yt_dlp_command",
+        lambda: ["yt-dlp"],
+    )
+
+    result = probe_ringcentral_recording_access(
+        "https://xmrupxmn-rxe-1-v.int.rclabenv.com/recordings/abc",
+        auth=RingCentralDownloadAuth(cookie_file="/tmp/cookies.txt"),
+    )
+
+    assert result["ok"] is False
+    assert result["diagnostic"]["reason"] == "ringcentral_permission_denied"
+    assert "code=secret" not in result["diagnostic"]["message"]
