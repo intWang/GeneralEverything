@@ -223,6 +223,10 @@
   opacity: 0.72;
 }
 
+.primaryButton:disabled[data-blocked="true"] {
+  cursor: not-allowed;
+}
+
 .buttonLink {
   min-height: 3rem;
   padding: 0.8rem 1.2rem;
@@ -436,6 +440,79 @@
 
 .probeFeedbackSuggestion {
   margin-top: 0.25rem;
+}
+
+.probeGuidancePanel {
+  border: 1px solid rgba(20, 36, 62, 0.14);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 18px 50px rgba(24, 41, 71, 0.08);
+  display: grid;
+  gap: 0.75rem;
+  grid-column: 1 / -1;
+  padding: 1rem;
+}
+
+.probeGuidancePanel[data-severity="success"] {
+  border-color: rgba(39, 142, 96, 0.28);
+  background: linear-gradient(135deg, rgba(238, 252, 245, 0.94), rgba(255, 255, 255, 0.82));
+}
+
+.probeGuidancePanel[data-severity="warning"] {
+  border-color: rgba(201, 130, 25, 0.3);
+  background: linear-gradient(135deg, rgba(255, 248, 232, 0.94), rgba(255, 255, 255, 0.82));
+}
+
+.probeGuidancePanel[data-severity="error"] {
+  border-color: rgba(194, 65, 65, 0.3);
+  background: linear-gradient(135deg, rgba(255, 241, 241, 0.94), rgba(255, 255, 255, 0.82));
+}
+
+.probeGuidanceHeader {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.probeGuidanceEyebrow {
+  color: #6b7280;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.probeGuidanceTitle {
+  color: #1f2937;
+  font-size: 1.05rem;
+  margin: 0;
+}
+
+.probeGuidanceDetail {
+  color: #6b7280;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.probeGuidanceWarning {
+  color: #92400e;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.probeGuidanceSteps {
+  color: #1f2937;
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.probeGuidanceSteps li {
+  line-height: 1.45;
 }
 
 .modeNotice {

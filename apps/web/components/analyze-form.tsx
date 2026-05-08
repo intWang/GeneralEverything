@@ -7,8 +7,10 @@ import {
   createJob,
   probeRingCentralAccess,
   type CreateJobResponse,
+  type RingCentralProbeResponse,
 } from "../lib/api";
 import type { InputMode, InputModeCapability } from "../lib/types";
+import { RingCentralAccessGuidance } from "./ringcentral-access-guidance";
 
 type AnalyzeFormProps = {
   capabilityStatus?: "error" | "loading" | "ready";
@@ -31,13 +33,14 @@ export function AnalyzeForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [accessFeedback, setAccessFeedback] = useState<{
-    message: string;
-    suggestion?: string;
+  const [accessCheck, setAccessCheck] = useState<{
+    errorMessage?: string;
+    result?: RingCentralProbeResponse;
   } | null>(null);
   const trimmedSourceUrl = sourceUrl.trim();
   const canCheckRingCentralAccess =
     isRingCentralMode && ringCentralIsReady && Boolean(trimmedSourceUrl);
+  const usesRingCentralProbeLayout = isRingCentralMode && ringCentralIsReady;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,40 +73,53 @@ export function AnalyzeForm({
 
   async function handleCheckAccess() {
     if (!trimmedSourceUrl) {
-      setAccessFeedback({ message: "Paste a RingCentral recording URL to check access." });
+      setAccessCheck({
+        result: {
+          diagnostic: {
+            message: "Paste a RingCentral recording URL to check access.",
+            reason: "ringcentral_download_failed",
+          },
+          input_mode: "ringcentral_recording",
+          ok: false,
+          source_url: trimmedSourceUrl,
+        },
+      });
       return;
     }
 
     if (!canCheckRingCentralAccess) {
-      setAccessFeedback({
-        message: "RingCentral server authentication is required before checking access.",
+      setAccessCheck({
+        result: {
+          diagnostic: {
+            message: "RingCentral server authentication is required before checking access.",
+            reason: "ringcentral_auth_required",
+          },
+          input_mode: "ringcentral_recording",
+          ok: false,
+          source_url: trimmedSourceUrl,
+        },
       });
       return;
     }
 
     setIsCheckingAccess(true);
-    setAccessFeedback(null);
+    setAccessCheck(null);
 
     try {
       const probe = await probeRingCentralAccess(trimmedSourceUrl);
-      if (probe.ok) {
-        setAccessFeedback({
-          message: "RingCentral access ready. You can analyze this recording.",
-        });
-      } else {
-        setAccessFeedback({
-          message:
-            probe.diagnostic?.message ??
-            "RingCentral access could not be confirmed.",
-          suggestion: probe.diagnostic?.suggestion,
-        });
-      }
+      setAccessCheck({ result: probe });
     } catch (error) {
-      setAccessFeedback({
-        message:
-          error instanceof Error
-            ? error.message
-            : "RingCentral access could not be checked.",
+      setAccessCheck({
+        errorMessage: "Access check could not complete.",
+        result: {
+          diagnostic: {
+            message: "RingCentral access could not be checked.",
+            reason: "ringcentral_download_failed",
+          },
+          input_mode: "ringcentral_recording",
+          ok: false,
+          source_url: trimmedSourceUrl,
+        },
       });
     } finally {
       setIsCheckingAccess(false);
@@ -113,7 +129,7 @@ export function AnalyzeForm({
   return (
     <form
       className={styles.formCard}
-      data-probe-layout={canCheckRingCentralAccess ? "true" : "false"}
+      data-probe-layout={usesRingCentralProbeLayout ? "true" : "false"}
       onSubmit={handleSubmit}
     >
       {isRingCentralMode ? (
@@ -145,7 +161,7 @@ export function AnalyzeForm({
         name="sourceUrl"
         onChange={(event) => {
           setSourceUrl(event.target.value);
-          setAccessFeedback(null);
+          setAccessCheck(null);
         }}
         placeholder={
           isRingCentralMode
@@ -173,6 +189,7 @@ export function AnalyzeForm({
             : "Analyze"
         }
         className={styles.primaryButton}
+        data-blocked={ringCentralIsBlocked ? "true" : "false"}
         disabled={isSubmitting || ringCentralIsBlocked}
         type="submit"
       >
@@ -189,13 +206,12 @@ export function AnalyzeForm({
           {feedback}
         </p>
       ) : null}
-      {accessFeedback ? (
-        <div aria-live="polite" className={styles.formFeedback}>
-          <p className={styles.probeFeedbackMessage}>{accessFeedback.message}</p>
-          {accessFeedback.suggestion ? (
-            <p className={styles.probeFeedbackSuggestion}>{accessFeedback.suggestion}</p>
-          ) : null}
-        </div>
+      {accessCheck?.result ? (
+        <RingCentralAccessGuidance
+          diagnostic={accessCheck.result.diagnostic}
+          errorMessage={accessCheck.errorMessage}
+          ok={accessCheck.result.ok}
+        />
       ) : null}
     </form>
   );
