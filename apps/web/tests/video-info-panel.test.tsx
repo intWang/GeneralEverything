@@ -219,3 +219,58 @@ test("renders diagnostics with suggestions", () => {
     screen.getByText("Check that the sharing link is still active."),
   ).toBeInTheDocument();
 });
+
+test.each([
+  {
+    label: "Session expired",
+    message: "RingCentral could not access this recording because the session expired.",
+    reason: "ringcentral_session_expired",
+    suggestion: "Sign in to RingCentral again, then retry the recording link.",
+  },
+  {
+    label: "Permission denied",
+    message: "RingCentral denied access to this recording.",
+    reason: "ringcentral_permission_denied",
+    suggestion: "Ask the meeting owner to grant access or share a public recording link.",
+  },
+  {
+    label: "Recording unavailable",
+    message: "RingCentral says this recording is no longer available.",
+    reason: "ringcentral_recording_unavailable",
+    suggestion: "Confirm the recording has not expired or been deleted.",
+  },
+  {
+    label: "Unsupported page",
+    message: "This RingCentral page is not a supported recording view.",
+    reason: "ringcentral_unsupported_page",
+    suggestion: "Open the direct recording playback page and submit that URL.",
+  },
+  {
+    label: "Authentication required",
+    message: "RingCentral requires authentication before the recording can be read.",
+    reason: "ringcentral_auth_required",
+    suggestion: "Configure RingCentral authentication on the server before retrying.",
+  },
+])(
+  "renders RingCentral diagnostic details for $reason",
+  ({ label, message, reason, suggestion }) => {
+    render(
+      <VideoInfoPanel
+        diagnostics={[
+          {
+            message,
+            reason,
+            stage: "probe",
+            suggestion,
+          },
+        ]}
+        inputMode="ringcentral_recording"
+        sourceUrl="https://example.com/recording"
+      />,
+    );
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.getByText(suggestion)).toBeInTheDocument();
+    expect(screen.getByText(label)).toBeInTheDocument();
+  },
+);

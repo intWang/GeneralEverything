@@ -136,3 +136,62 @@ def test_execute_ringcentral_download_shell_redacts_sensitive_failure_output(
     assert exc_info.value.reason == "ringcentral_download_failed"
     assert "code=secret" not in exc_info.value.message
     assert "access_token=hidden" not in exc_info.value.message
+
+
+@pytest.mark.parametrize(
+    ("stderr", "expected_reason"),
+    [
+        ("HTTP Error 401: Unauthorized. Please log in again.", "ringcentral_session_expired"),
+        ("HTTP Error 403: Forbidden. Permission denied.", "ringcentral_permission_denied"),
+        ("HTTP Error 404: Not Found. Recording unavailable.", "ringcentral_recording_unavailable"),
+        ("Unsupported URL: no suitable extractor for this RingCentral page.", "ringcentral_unsupported_page"),
+    ],
+)
+def test_execute_ringcentral_download_shell_classifies_common_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    stderr: str,
+    expected_reason: str,
+) -> None:
+    job = _make_job()
+
+    def fake_run(command: list[str], **_kwargs) -> CompletedProcess[str]:
+        return CompletedProcess(
+            args=command,
+            returncode=1,
+            stdout="",
+            stderr=stderr,
+        )
+
+    monkeypatch.setattr("app.services.downloads.ringcentral.subprocess.run", fake_run)
+    monkeypatch.setattr(
+        "app.services.downloads.ringcentral._resolve_yt_dlp_command",
+        lambda: ["yt-dlp"],
+    )
+
+    with pytest.raises(RingCentralDownloadError) as exc_info:
+        execute_ringcentral_download_shell(
+            job,
+            auth=RingCentralDownloadAuth(cookies_from_browser="chrome"),
+            download_root=tmp_path,
+        )
+
+    assert exc_info.value.reason == expected_reason
+    assert exc_info.value.suggestion
+
+
+def test_ringcentral_download_error_exposes_diagnostic_payload() -> None:
+    error = RingCentralDownloadError(
+        "ringcentral_permission_denied",
+        "The authenticated RingCentral session cannot access this recording.",
+    )
+
+    assert error.diagnostic().model_dump() == {
+        "reason": "ringcentral_permission_denied",
+        "stage": "download",
+        "message": "The authenticated RingCentral session cannot access this recording.",
+        "suggestion": (
+            "Open the recording in the configured browser/session, confirm your account "
+            "has permission, then retry."
+        ),
+    }

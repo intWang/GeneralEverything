@@ -16,6 +16,14 @@ type VideoInfoPanelProps = {
   title?: string | null;
 };
 
+const DIAGNOSTIC_REASON_LABELS: Record<string, string> = {
+  ringcentral_auth_required: "Authentication required",
+  ringcentral_permission_denied: "Permission denied",
+  ringcentral_recording_unavailable: "Recording unavailable",
+  ringcentral_session_expired: "Session expired",
+  ringcentral_unsupported_page: "Unsupported page",
+};
+
 function formatDuration(durationSeconds?: number | null) {
   if (!durationSeconds || durationSeconds < 0) {
     return "Pending analysis";
@@ -72,6 +80,25 @@ function getAssetStatus(downloadProgress?: DownloadProgress | null) {
   }
 
   return "Not generated yet";
+}
+
+function formatDiagnosticReasonLabel(reason: string) {
+  const mappedReason = DIAGNOSTIC_REASON_LABELS[reason];
+  if (mappedReason) {
+    return mappedReason;
+  }
+
+  const label = reason
+    .replace(/^ringcentral_/, "")
+    .split("_")
+    .filter(Boolean)
+    .join(" ");
+
+  if (!label) {
+    return "Diagnostic";
+  }
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 export function VideoInfoPanel({
@@ -205,6 +232,9 @@ export function VideoInfoPanel({
           <ul className={styles.historyList}>
             {diagnostics?.map((diagnostic) => (
               <li key={`${diagnostic.stage}-${diagnostic.reason}-${diagnostic.message}`}>
+                <p className={styles.modeNoticeStatus}>
+                  {formatDiagnosticReasonLabel(diagnostic.reason)}
+                </p>
                 <p className={styles.modeNoticeTitle}>{diagnostic.message}</p>
                 <p className={styles.modeNoticeBody}>{diagnostic.suggestion}</p>
               </li>

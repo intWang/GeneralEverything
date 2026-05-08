@@ -18,6 +18,7 @@ from app.services.connectors.ringcentral import (
     is_ringcentral_recording_url,
     sanitize_ringcentral_url,
 )
+from app.services.downloads.ringcentral import RingCentralDownloadError
 from app.tasks import process_analysis_job
 from app.services.downloads.public_video import PublicVideoDownloadShell
 
@@ -239,4 +240,55 @@ def test_process_analysis_job_uses_ringcentral_download_runner_when_available(
     assert ("ready", "download_ready") in persisted_jobs
     assert any(event_name == "video.download" for event_name, _payload in events)
     assert "ringcentral_auth_required" not in serialized_events
+    assert "code=secret" not in serialized_events
+
+
+def test_process_analysis_job_publishes_specific_ringcentral_download_diagnostic() -> None:
+    source_url = (
+        "https://xmrupxmn-rxe-1-v.int.rclabenv.com/recordings/abc"
+        "?isMeetingId=true&code=secret"
+    )
+    job = AnalysisJob(
+        input_mode=InputMode.RINGCENTRAL_RECORDING,
+        source_url=source_url,
+    )
+    events: list[tuple[str, dict]] = []
+
+    def fail_download(_job, planned=None, auth=None):
+        raise RingCentralDownloadError(
+            "ringcentral_permission_denied",
+            "The authenticated RingCentral session cannot access this recording.",
+        )
+
+    asyncio.run(
+        process_analysis_job(
+            {
+                "publish": lambda event_name, payload: events.append(
+                    (event_name, payload)
+                ),
+                "load_job": lambda _job_id: job,
+                "persist_job": lambda _updated_job: None,
+                "ringcentral_download_auth": {"cookies_from_browser": "chrome"},
+                "execute_ringcentral_download_shell": fail_download,
+            },
+            job.id,
+        )
+    )
+
+    diagnostics = json.loads(job.diagnostics_json or "[]")
+    serialized_events = json.dumps(events)
+    assert job.status == JobStatus.FAILED
+    assert job.stage == "ringcentral_permission_denied"
+    assert diagnostics == [
+        {
+            "reason": "ringcentral_permission_denied",
+            "stage": "download",
+            "message": "The authenticated RingCentral session cannot access this recording.",
+            "suggestion": (
+                "Open the recording in the configured browser/session, confirm your "
+                "account has permission, then retry."
+            ),
+        }
+    ]
+    assert "ringcentral_permission_denied" in serialized_events
     assert "code=secret" not in serialized_events

@@ -6,7 +6,7 @@ import re
 import subprocess
 
 from app.services.connectors.ringcentral import sanitize_ringcentral_url
-from app.services.downloads.progress import DownloadFormatChoice
+from app.services.downloads.progress import DownloadDiagnostic, DownloadFormatChoice
 from app.services.downloads.public_video import (
     PublicVideoDownloadShell,
     _extract_downloaded_path,
@@ -48,6 +48,15 @@ class RingCentralDownloadError(RuntimeError):
         super().__init__(message)
         self.reason = reason
         self.message = message
+        self.suggestion = _suggestion_for_reason(reason)
+
+    def diagnostic(self) -> DownloadDiagnostic:
+        return DownloadDiagnostic(
+            reason=self.reason,
+            stage="download",
+            message=self.message,
+            suggestion=self.suggestion,
+        )
 
 
 def plan_ringcentral_download_shell(
@@ -148,8 +157,9 @@ def execute_ringcentral_download_shell(
             or result.stdout
             or "yt-dlp failed to download the RingCentral recording."
         ).strip()
+        reason = _classify_failure_reason(message)
         raise RingCentralDownloadError(
-            "ringcentral_download_failed",
+            reason,
             _redact_sensitive_text(message),
         )
 
@@ -197,3 +207,65 @@ def _redact_sensitive_text(value: str) -> str:
             flags=re.IGNORECASE,
         )
     return redacted
+
+
+def _classify_failure_reason(message: str) -> str:
+    normalized = message.lower()
+
+    if any(marker in normalized for marker in ("401", "unauthorized", "log in", "login")):
+        return "ringcentral_session_expired"
+
+    if any(marker in normalized for marker in ("403", "forbidden", "permission denied")):
+        return "ringcentral_permission_denied"
+
+    if any(
+        marker in normalized
+        for marker in ("404", "not found", "recording unavailable", "recording expired")
+    ):
+        return "ringcentral_recording_unavailable"
+
+    if any(
+        marker in normalized
+        for marker in ("unsupported url", "no suitable extractor", "unsupported page")
+    ):
+        return "ringcentral_unsupported_page"
+
+    return "ringcentral_download_failed"
+
+
+def _suggestion_for_reason(reason: str) -> str:
+    suggestions = {
+        "ringcentral_auth_required": (
+            "Configure RINGCENTRAL_COOKIE_FILE or RINGCENTRAL_COOKIES_FROM_BROWSER, "
+            "confirm the recording opens in that authenticated context, then retry."
+        ),
+        "ringcentral_session_expired": (
+            "Refresh the configured browser session or export a fresh cookie file, "
+            "confirm the recording opens, then retry."
+        ),
+        "ringcentral_permission_denied": (
+            "Open the recording in the configured browser/session, confirm your account "
+            "has permission, then retry."
+        ),
+        "ringcentral_recording_unavailable": (
+            "Confirm the recording still exists, the link has not expired, and the "
+            "recording owner still allows access."
+        ),
+        "ringcentral_unsupported_page": (
+            "Open the URL in a browser and try copying the direct recording playback URL; "
+            "if it still fails, capture a sanitized sample for connector support."
+        ),
+        "tool_missing": "Install yt-dlp in the API runtime, then retry the recording job.",
+        "download_artifact_missing": (
+            "Retry the job and inspect the API server download directory if the artifact "
+            "is still missing."
+        ),
+        "missing_source_url": "Retry from the original RingCentral recording URL.",
+    }
+    return suggestions.get(
+        reason,
+        (
+            "Check that the recording opens in the configured authenticated session, "
+            "then retry. If it still fails, review the sanitized backend diagnostic."
+        ),
+    )

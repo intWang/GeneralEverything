@@ -104,20 +104,7 @@ def _mark_ringcentral_download_failure(job, exc: RingCentralDownloadError) -> No
     job.status = JobStatus.FAILED
     job.stage = exc.reason
     job.download_status = "failed"
-    job.diagnostics_json = json.dumps(
-        [
-            {
-                "reason": exc.reason,
-                "stage": "download",
-                "message": exc.message,
-                "suggestion": (
-                    "Configure RINGCENTRAL_COOKIE_FILE or "
-                    "RINGCENTRAL_COOKIES_FROM_BROWSER, confirm the recording opens "
-                    "in that authenticated context, then retry."
-                ),
-            }
-        ]
-    )
+    job.diagnostics_json = json.dumps([exc.diagnostic().model_dump()])
 
 
 def _apply_public_video_transcript_shell(
