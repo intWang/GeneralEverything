@@ -70,6 +70,12 @@ export function buildApiUrl(path: string) {
   return `${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+export function buildJobAssetUrl(jobId: string, assetId: string) {
+  return buildApiUrl(
+    `/jobs/${encodeURIComponent(jobId)}/assets/${encodeURIComponent(assetId)}`,
+  );
+}
+
 async function readJson<T>(input: string, init?: RequestInit) {
   const response = await fetch(input, init);
 

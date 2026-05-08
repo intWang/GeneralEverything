@@ -1,4 +1,5 @@
 import type { Diagnostic, DownloadFormat, DownloadProgress, InputMode } from "../lib/types";
+import { buildJobAssetUrl } from "../lib/api";
 import styles from "../app/homepage.module.css";
 
 type VideoInfoPanelProps = {
@@ -80,6 +81,10 @@ function getAssetStatus(downloadProgress?: DownloadProgress | null) {
   }
 
   return "Not generated yet";
+}
+
+function getDownloadAssetId(format: DownloadFormat) {
+  return format.format_id || format.kind;
 }
 
 function formatDiagnosticReasonLabel(reason: string) {
@@ -203,12 +208,12 @@ export function VideoInfoPanel({
                       {details ? (
                         <p className={styles.modeNoticeBody}>{details}</p>
                       ) : null}
-                      {format.artifact_path ? (
+                      {format.artifact_path && jobId ? (
                         <p className={styles.modeNoticeBody}>
                           <a
                             className={styles.previewSourceLink}
                             download
-                            href={format.artifact_path}
+                            href={buildJobAssetUrl(jobId, getDownloadAssetId(format))}
                           >
                             Download {format.format_label}
                           </a>

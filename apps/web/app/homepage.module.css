@@ -171,6 +171,7 @@
 
 .textInput {
   width: 100%;
+  min-width: 0;
   min-height: 4rem;
   padding: 0 1.25rem;
   border: 0;
@@ -1744,6 +1745,16 @@
 }
 
 @media (max-width: 959px) {
+  .formCard,
+  .formCard[data-probe-layout="true"] {
+    grid-template-columns: 1fr;
+  }
+
+  .primaryButton,
+  .probeButton {
+    width: 100%;
+  }
+
   .supportGrid {
     grid-template-columns: 1fr;
   }
@@ -1759,17 +1770,6 @@
     padding-top: 3.75rem;
   }
 
-  .formCard {
-    grid-template-columns: 1fr;
-  }
-
-  .primaryButton {
-    width: 100%;
-  }
-
-  .probeButton {
-    width: 100%;
-  }
 }
 
 @media (max-width: 640px) {

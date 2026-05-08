@@ -1031,13 +1031,6 @@ test("copies the visible structured transcript segment text", async () => {
 });
 
 test("highlights newly appended structured transcript segments", () => {
-  const scrollIntoView = vi.fn();
-
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-    configurable: true,
-    value: scrollIntoView,
-  });
-
   const { rerender } = render(
     <AITabs
       detectedLanguageName="English"
@@ -1056,7 +1049,21 @@ test("highlights newly appended structured transcript segments", () => {
   );
 
   fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
-  scrollIntoView.mockClear();
+  const transcriptViewport = screen.getByText((_content, element) =>
+    Boolean(
+      element?.tagName === "P" &&
+        element.textContent?.includes("First structured segment."),
+    ),
+  ).parentElement as HTMLElement;
+  Object.defineProperty(transcriptViewport, "scrollHeight", {
+    configurable: true,
+    value: 420,
+  });
+  Object.defineProperty(transcriptViewport, "clientHeight", {
+    configurable: true,
+    value: 120,
+  });
+  transcriptViewport.scrollTop = 0;
 
   rerender(
     <AITabs
@@ -1089,7 +1096,7 @@ test("highlights newly appended structured transcript segments", () => {
       ),
     ),
   ).toHaveAttribute("data-recent", "true");
-  expect(scrollIntoView).toHaveBeenCalled();
+  expect(transcriptViewport.scrollTop).toBe(420);
 });
 
 test("copies the full transcript text to the clipboard", async () => {
@@ -1122,13 +1129,6 @@ test("copies the full transcript text to the clipboard", async () => {
 });
 
 test("auto-scrolls transcript view when new streaming lines arrive", () => {
-  const scrollIntoView = vi.fn();
-
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-    configurable: true,
-    value: scrollIntoView,
-  });
-
   const { rerender } = render(
     <AITabs
       detectedLanguageName="Chinese"
@@ -1140,6 +1140,16 @@ test("auto-scrolls transcript view when new streaming lines arrive", () => {
   );
 
   fireEvent.click(screen.getByRole("tab", { name: "Transcript" }));
+  const transcriptViewport = screen.getByText("第一行字幕").parentElement as HTMLElement;
+  Object.defineProperty(transcriptViewport, "scrollHeight", {
+    configurable: true,
+    value: 360,
+  });
+  Object.defineProperty(transcriptViewport, "clientHeight", {
+    configurable: true,
+    value: 120,
+  });
+  transcriptViewport.scrollTop = 0;
 
   rerender(
     <AITabs
@@ -1151,17 +1161,10 @@ test("auto-scrolls transcript view when new streaming lines arrive", () => {
     />,
   );
 
-  expect(scrollIntoView).toHaveBeenCalled();
+  expect(transcriptViewport.scrollTop).toBe(360);
 });
 
 test("pauses auto-scroll when the reader scrolls upward and lets them jump to latest", () => {
-  const scrollIntoView = vi.fn();
-
-  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
-    configurable: true,
-    value: scrollIntoView,
-  });
-
   const { rerender } = render(
     <AITabs
       detectedLanguageName="Chinese"
@@ -1206,9 +1209,9 @@ test("pauses auto-scroll when the reader scrolls upward and lets them jump to la
   ).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Jump to latest" })).toBeInTheDocument();
 
-  scrollIntoView.mockClear();
+  transcriptViewport.scrollTop = 120;
   fireEvent.click(screen.getByRole("button", { name: "Jump to latest" }));
-  expect(scrollIntoView).toHaveBeenCalled();
+  expect(transcriptViewport.scrollTop).toBe(400);
 });
 
 test("briefly highlights the newest streaming transcript lines", () => {

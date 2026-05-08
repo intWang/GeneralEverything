@@ -2,9 +2,11 @@ import uuid
 import asyncio
 import json
 from dataclasses import asdict
+from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from fastapi import HTTPException, Query
+from fastapi.responses import FileResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -93,6 +95,26 @@ def _get_job_or_404(session: Session, job_id: uuid.UUID) -> AnalysisJob:
     return job
 
 
+def _iter_job_asset_paths(job: AnalysisJob, asset_id: str):
+    download_formats = job.download_formats or []
+    for download_format in download_formats:
+        if not isinstance(download_format, dict):
+            continue
+
+        artifact_path = download_format.get("artifact_path")
+        if not isinstance(artifact_path, str) or not artifact_path:
+            continue
+
+        if asset_id in {
+            download_format.get("format_id"),
+            download_format.get("kind"),
+        }:
+            yield artifact_path
+
+    if asset_id == job.download_format_id and job.download_artifact_path:
+        yield job.download_artifact_path
+
+
 def _queue_job_background_task(
     job: AnalysisJob,
     background_tasks: BackgroundTasks,
@@ -179,6 +201,25 @@ def get_job(
     session: Session = Depends(get_session),
 ) -> JobResponse:
     return _get_job_or_404(session, job_id)
+
+
+@router.get("/{job_id}/assets/{asset_id:path}")
+def download_job_asset(
+    job_id: uuid.UUID,
+    asset_id: str,
+    session: Session = Depends(get_session),
+) -> FileResponse:
+    job = _get_job_or_404(session, job_id)
+
+    for artifact_path in _iter_job_asset_paths(job, asset_id):
+        resolved_artifact_path = Path(artifact_path)
+        if resolved_artifact_path.is_file():
+            return FileResponse(
+                resolved_artifact_path,
+                filename=resolved_artifact_path.name,
+            )
+
+    raise HTTPException(status_code=404, detail="Asset not found")
 
 
 @router.get("/{job_id}/exports/markdown")

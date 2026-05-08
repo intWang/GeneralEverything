@@ -71,6 +71,19 @@ test("submits the source url and reports job creation", async () => {
   ).toBeInTheDocument();
 });
 
+test("marks the public video form for stable responsive input layout", () => {
+  const { container } = render(<AnalyzeForm inputMode="public_video" />);
+
+  expect(container.querySelector("form")).toHaveAttribute(
+    "data-input-mode",
+    "public_video",
+  );
+  expect(screen.getByLabelText("Video source")).toHaveAttribute(
+    "placeholder",
+    "Paste a public video URL",
+  );
+});
+
 test("blocks analysis submission in RingCentral mode until auth exists", () => {
   const createJob = vi.mocked(api.createJob);
   const onJobCreated = vi.fn();

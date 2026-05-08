@@ -120,6 +120,7 @@ test("renders asset formats with artifact download actions", () => {
           resolution: "audio",
         },
       ]}
+      jobId="11111111-1111-1111-1111-111111111111"
       inputMode="public_video"
       sourceUrl="https://example.com/video"
     />,
@@ -132,11 +133,11 @@ test("renders asset formats with artifact download actions", () => {
   expect(screen.getByText("audio · m4a · audio")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Download Best available" })).toHaveAttribute(
     "href",
-    "artifacts/downloads/demo/source.mp4",
+    "http://localhost:8000/api/jobs/11111111-1111-1111-1111-111111111111/assets/best",
   );
   expect(screen.getByRole("link", { name: "Download Audio only" })).toHaveAttribute(
     "href",
-    "artifacts/downloads/demo/audio.m4a",
+    "http://localhost:8000/api/jobs/11111111-1111-1111-1111-111111111111/assets/audio",
   );
 });
 

@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
+import json
 from pathlib import Path
 from uuid import UUID
 
@@ -12,7 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.routes import jobs as jobs_routes
 from app.db import get_session
 from app.main import app
-from app.models.job import AnalysisJob
+from app.models.job import AnalysisJob, InputMode
 from app.schemas.video_metadata import VideoMetadata
 
 API_ROOT = Path(__file__).resolve().parents[1]
@@ -305,6 +306,53 @@ def test_get_job_returns_404_when_missing(tmp_path) -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Job not found"}
+
+
+def test_get_job_asset_returns_existing_download_format_bytes(tmp_path) -> None:
+    client, testing_session = make_test_client(tmp_path)
+    artifact_path = tmp_path / "source.mp4"
+    artifact_path.write_bytes(b"video-bytes")
+
+    with testing_session() as session:
+        job = AnalysisJob(
+            input_mode=InputMode.PUBLIC_VIDEO,
+            source_url="https://example.com/video",
+            download_status="ready",
+            download_format_id="best",
+            download_format_label="Best available",
+            download_artifact_path=str(artifact_path),
+            download_formats_json=json.dumps(
+                [
+                    {
+                        "artifact_path": str(artifact_path),
+                        "format_id": "best",
+                        "format_label": "Best available",
+                        "kind": "video",
+                    },
+                    {
+                        "artifact_path": None,
+                        "format_id": "audio",
+                        "format_label": "Audio only",
+                        "kind": "audio",
+                    },
+                ]
+            ),
+        )
+        session.add(job)
+        session.commit()
+        job_id = job.id
+
+    response = client.get(f"/api/jobs/{job_id}/assets/best")
+    unavailable_response = client.get(f"/api/jobs/{job_id}/assets/audio")
+    missing_response = client.get(f"/api/jobs/{job_id}/assets/not-stored")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.content == b"video-bytes"
+    assert response.headers["content-type"].startswith("video/mp4")
+    assert unavailable_response.status_code == 404
+    assert missing_response.status_code == 404
 
 
 def test_rename_job_updates_title(tmp_path) -> None:

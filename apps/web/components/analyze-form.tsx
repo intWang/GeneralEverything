@@ -129,6 +129,7 @@ export function AnalyzeForm({
   return (
     <form
       className={styles.formCard}
+      data-input-mode={inputMode}
       data-probe-layout={usesRingCentralProbeLayout ? "true" : "false"}
       onSubmit={handleSubmit}
     >

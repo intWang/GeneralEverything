@@ -91,7 +91,6 @@ export function TranscriptTab({
   const hasTranscriptContent = hasSourceText || hasStructuredSegments;
   const hasSegmentCount = segmentCount !== null && segmentCount !== undefined;
   const transcriptViewportRef = useRef<HTMLDivElement | null>(null);
-  const transcriptTailRef = useRef<HTMLDivElement | null>(null);
   const previousLineCountRef = useRef(0);
   const highlightResetTimerRef = useRef<number | null>(null);
   const [autoScrollPaused, setAutoScrollPaused] = useState(false);
@@ -130,6 +129,15 @@ export function TranscriptTab({
       ? sourceSegments?.map((segment) => segment.text).join("\n") ?? null
       : sourceText ?? null;
 
+  function scrollTranscriptViewportToLatest() {
+    const viewport = transcriptViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    viewport.scrollTop = viewport.scrollHeight;
+  }
+
   useEffect(() => {
     if (shellState !== "partial" || !hasTranscriptContent) {
       return;
@@ -139,14 +147,7 @@ export function TranscriptTab({
       return;
     }
 
-    if (typeof transcriptTailRef.current?.scrollIntoView !== "function") {
-      return;
-    }
-
-    transcriptTailRef.current.scrollIntoView({
-      behavior: "smooth",
-      block: "end",
-    });
+    scrollTranscriptViewportToLatest();
   }, [autoScrollPaused, hasTranscriptContent, segmentCount, shellState, sourceSegments, sourceText]);
 
   useEffect(() => {
@@ -204,12 +205,7 @@ export function TranscriptTab({
 
   function jumpToLatest() {
     setAutoScrollPaused(false);
-    if (typeof transcriptTailRef.current?.scrollIntoView === "function") {
-      transcriptTailRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "end",
-      });
-    }
+    scrollTranscriptViewportToLatest();
   }
 
   async function copyTranscriptToClipboard() {
@@ -341,7 +337,6 @@ export function TranscriptTab({
                     {line}
                   </p>
                 ))}
-            <div ref={transcriptTailRef} />
           </div>
         </>
       ) : (

@@ -7,6 +7,8 @@ coverage/
 .next/
 .turbo/
 .pnpm-store/
+apps/api/get-local-demo.db
+apps/api/var/
 
 .venv/
 __pycache__/
